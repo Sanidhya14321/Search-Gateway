@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: crmind-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_DIRECT
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: INTERNAL_SERVICE_API_KEY
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: EMBEDDING_DIMENSIONS
+        value: "1536"
+      - key: DB_POOL_MAX_SIZE
+        value: "5"
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: WARNING
+      - key: RESPECT_ROBOTS_TXT
+        value: "true"
+      - key: CACHE_TTL_SECONDS
+        value: 3600

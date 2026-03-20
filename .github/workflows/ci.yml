@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: crmind_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d crmind_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Init schema
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/crmind_test
+          DATABASE_URL_DIRECT: postgresql://test:test@localhost:5432/crmind_test
+          API_KEY: ci-key
+        run: python scripts/init_db.py
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgresql://test:test@localhost:5432/crmind_test
+          DATABASE_URL: postgresql://test:test@localhost:5432/crmind_test
+          DATABASE_URL_DIRECT: postgresql://test:test@localhost:5432/crmind_test
+          API_KEY: ci-key
+        run: pytest tests/ -v
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Frontend build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: anon-key-placeholder
+        run: |
+          npm ci
+          npx next build --no-lint
