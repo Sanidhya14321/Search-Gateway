@@ -2,6 +2,9 @@ from backend.agents.state import CRMindState
 from backend.agents.llm_client import llm_json_call_with_fallback
 from backend.services.retrieval.context_assembler import assemble_context
 
+# Backward-compatible alias for tests and older call sites.
+llm_json_call = llm_json_call_with_fallback
+
 
 async def synthesize_node(state: CRMindState) -> dict:
     context = assemble_context([])
@@ -24,7 +27,7 @@ async def synthesize_node(state: CRMindState) -> dict:
         f"Context:\n{context}\n"
         "Return JSON with keys: summary, facts, people, signals, degraded."
     )
-    synthesis = await llm_json_call_with_fallback(prompt, system=system_prompt)
+    synthesis = await llm_json_call(prompt, system=system_prompt)
 
     return {
         "steps_log": state.get("steps_log", []) + ["[synthesize] synthesized grounded response"],

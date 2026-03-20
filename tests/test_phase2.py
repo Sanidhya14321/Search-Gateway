@@ -5,6 +5,7 @@ import pytest
 from backend.crawler.chunker import chunk_text
 from backend.crawler.extractor import extract_clean_text
 from backend.crawler.queue_worker import process_crawl_item_by_id
+from backend.config import settings
 from backend.crawler.store import compute_content_hash
 from backend.dependencies import get_db_connection
 from backend.main import app
@@ -85,20 +86,22 @@ async def test_vector_search(db_pool):
         await conn.execute(
             """
             INSERT INTO chunks (source_doc_id, chunk_index, chunk_text, entity_id, entity_type, embedding, embed_model_id)
-            VALUES ($1::uuid, 0, 'alpha funding', $2::uuid, 'company', $3::vector, 'nomic-embed-text')
+            VALUES ($1::uuid, 0, 'alpha funding', $2::uuid, 'company', $3::vector, $4)
             """,
             source_doc_id,
             company_id,
             vector_a,
+            settings.embedding_model,
         )
         await conn.execute(
             """
             INSERT INTO chunks (source_doc_id, chunk_index, chunk_text, entity_id, entity_type, embedding, embed_model_id)
-            VALUES ($1::uuid, 1, 'beta hiring', $2::uuid, 'company', $3::vector, 'nomic-embed-text')
+            VALUES ($1::uuid, 1, 'beta hiring', $2::uuid, 'company', $3::vector, $4)
             """,
             source_doc_id,
             company_id,
             vector_b,
+            settings.embedding_model,
         )
 
         fake_embed = FakeEmbeddingService(vector_a)
@@ -225,7 +228,7 @@ async def test_compute_freshness_30_days():
 
 
 @pytest.mark.asyncio
-async def test_crawl_endpoint_robots_blocked(client, db_pool, monkeypatch):
+async def test_crawl_endpoint_robots_blocked(client_authed, db_pool, monkeypatch):
     async def _override_db():
         async with db_pool.acquire() as conn:
             yield conn
@@ -234,7 +237,7 @@ async def test_crawl_endpoint_robots_blocked(client, db_pool, monkeypatch):
     app.dependency_overrides[get_db_connection] = _override_db
 
     try:
-        response = await client.post("/api/v1/crawl", json={"url": "https://example.com"})
+        response = await client_authed.post("/api/v1/crawl", json={"url": "https://example.com"})
     finally:
         app.dependency_overrides.pop(get_db_connection, None)
 

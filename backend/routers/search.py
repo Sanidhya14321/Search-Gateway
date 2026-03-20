@@ -9,6 +9,7 @@ from backend.services.user_service import record_search
 from backend.services.entity_resolver import resolve_entity
 from backend.services.retrieval.ranker import rank_chunks
 from backend.services.retrieval.vector_search import vector_search
+from loguru import logger
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -61,7 +62,11 @@ async def search_endpoint(
             },
         )
 
-    chunks = await vector_search(query, entity_id=str(resolved.record.get("id")) if resolved else None, top_k=8)
+    chunks = []
+    try:
+        chunks = await vector_search(query, entity_id=str(resolved.record.get("id")) if resolved else None, top_k=8)
+    except Exception as exc:
+        logger.warning("search_vector_degraded | error={}", type(exc).__name__)
     ranked = rank_chunks(chunks)
     context_preview = [
         {

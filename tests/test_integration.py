@@ -212,7 +212,7 @@ async def test_cache_hit(db_pool, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_batch_enrichment(client, db_pool, monkeypatch):
+async def test_batch_enrichment(client_authed, db_pool, monkeypatch):
     monkeypatch.setattr("backend.routers.enrich.get_pool", lambda: db_pool)
 
     async def _fake_run_agent(workflow_name: str, query: str, **kwargs):
@@ -232,13 +232,13 @@ async def test_batch_enrichment(client, db_pool, monkeypatch):
     monkeypatch.setattr("backend.routers.enrich.run_agent", _fake_run_agent)
 
     payload = {"leads": [{"name": f"Lead {idx}", "company": "Example"} for idx in range(5)]}
-    queued = await client.post("/api/v1/enrich/batch", json=payload)
+    queued = await client_authed.post("/api/v1/enrich/batch", json=payload)
     assert queued.status_code == 200
 
     job_id = queued.json()["job_id"]
     completed = None
     for _ in range(20):
-        response = await client.get(f"/api/v1/enrich/batch/{job_id}")
+        response = await client_authed.get(f"/api/v1/enrich/batch/{job_id}")
         body = response.json()
         if body.get("status") == "completed":
             completed = body

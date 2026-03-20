@@ -102,7 +102,7 @@ async def seeded_source_and_chunks(db_pool: asyncpg.Pool, seeded_company: dict) 
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
             """,
-            seeded_company["canonical_id"],
+            seeded_company["id"],
             "company",
             "https://example.test/doc",
             "website",
@@ -126,7 +126,7 @@ async def seeded_source_and_chunks(db_pool: asyncpg.Pool, seeded_company: dict) 
                 RETURNING id
                 """,
                 source_doc_id,
-                seeded_company["canonical_id"],
+                seeded_company["id"],
                 "company",
                 text,
                 idx,

@@ -1,6 +1,7 @@
 import json
 import time
 from collections.abc import Sequence
+from inspect import isawaitable
 from uuid import uuid4
 
 from backend.agents.account_brief import build_account_brief_graph
@@ -88,7 +89,8 @@ async def run_agent(workflow_name: str, query: str, **kwargs) -> CRMindState:
     }
 
     run_id = str(kwargs.get("run_id") or uuid4())
-    pool = await get_pool()
+    pool_candidate = get_pool()
+    pool = await pool_candidate if isawaitable(pool_candidate) else pool_candidate
     started = time.perf_counter()
     async with pool.acquire() as db:
         query_hash = make_query_hash(query, selected_workflow)
