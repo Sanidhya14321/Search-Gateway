@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     )
     embedding_model: str = Field(
         default="BAAI/bge-small-en-v1.5",
-        validation_alias=AliasChoices("OPENAI_EMBED_MODEL", "EMBEDDING_MODEL"),
+        validation_alias=AliasChoices("EMBEDDING_MODEL", "OPENAI_EMBED_MODEL"),
     )
     embedding_dimensions: int = Field(default=384, alias="EMBEDDING_DIMENSIONS")
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
