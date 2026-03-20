@@ -2,7 +2,7 @@ services:
   - type: web
     name: crmind-api
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.prod.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
     autoDeploy: true
@@ -14,8 +14,6 @@ services:
       - key: REDIS_URL
         sync: false
       - key: GROQ_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
         sync: false
       - key: SUPABASE_URL
         sync: false
@@ -29,8 +27,10 @@ services:
         sync: false
       - key: API_KEY
         sync: false
+      - key: EMBEDDING_MODEL
+        value: BAAI/bge-small-en-v1.5
       - key: EMBEDDING_DIMENSIONS
-        value: "1536"
+        value: "384"
       - key: DB_POOL_MAX_SIZE
         value: "5"
       - key: ENVIRONMENT

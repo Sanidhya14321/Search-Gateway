@@ -19,10 +19,10 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GROQ_LLM_MODEL_FALLBACK", "GROQ_FALLBACK_MODEL"),
     )
     embedding_model: str = Field(
-        default="text-embedding-3-small",
+        default="BAAI/bge-small-en-v1.5",
         validation_alias=AliasChoices("OPENAI_EMBED_MODEL", "EMBEDDING_MODEL"),
     )
-    embedding_dimensions: int = Field(default=1536, alias="EMBEDDING_DIMENSIONS")
+    embedding_dimensions: int = Field(default=384, alias="EMBEDDING_DIMENSIONS")
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
     supabase_url: str = Field(default="", alias="SUPABASE_URL")

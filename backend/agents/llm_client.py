@@ -2,7 +2,6 @@ import json
 
 from groq import AsyncGroq
 from loguru import logger
-from openai import AsyncOpenAI
 
 from backend.config import settings
 from backend.middleware.trace import get_trace_id
@@ -37,10 +36,6 @@ def _groq_client() -> AsyncGroq:
     return AsyncGroq(api_key=settings.groq_api_key)
 
 
-def _openai_client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=settings.openai_api_key)
-
-
 @llm_retry
 async def _llm_json_call_groq(prompt: str, system: str = "", model: str | None = None) -> dict:
     safe_prompt = wrap_user_input_in_prompt(prompt, context="Agent workflow context")
@@ -63,26 +58,10 @@ async def _llm_json_call_groq(prompt: str, system: str = "", model: str | None =
 
 @llm_retry
 async def llm_json_call(prompt: str, system: str = "", model: str | None = None, provider: str = "groq") -> dict:
-    safe_prompt = wrap_user_input_in_prompt(prompt, context="Agent workflow context")
     target_provider = provider.lower()
-    if target_provider == "groq":
-        return await _llm_json_call_groq(prompt=prompt, system=system, model=model)
-
-    response = await _openai_client().chat.completions.create(
-        model=model or "gpt-4o-mini",
-        response_format={"type": "json_object"},
-        temperature=0,
-        messages=[
-            {"role": "system", "content": system or "Return valid JSON only."},
-            {"role": "user", "content": safe_prompt},
-        ],
-    )
-    raw_text = _extract_text(response.choices[0].message.content)
-    try:
-        return json.loads(_strip_json_fences(raw_text))
-    except Exception as exc:
-        logger.error("llm_json_parse_failed | provider={} trace_id={} error={} raw={}", target_provider, get_trace_id(), type(exc).__name__, raw_text)
-        raise ValueError(raw_text) from exc
+    if target_provider != "groq":
+        raise ValueError(f"Unsupported provider: {provider}. This deployment is Groq-only.")
+    return await _llm_json_call_groq(prompt=prompt, system=system, model=model)
 
 
 async def llm_json_call_with_fallback(prompt: str, system: str = "", model: str | None = None) -> dict:
@@ -103,8 +82,8 @@ async def llm_json_call_with_fallback(prompt: str, system: str = "", model: str 
             )
         except Exception as fallback_exc:
             logger.warning(
-                "llm_secondary_failed | trace_id={} error={} fallback_provider=openai",
+                "llm_secondary_failed | trace_id={} error={} fallback_provider=none",
                 get_trace_id(),
                 type(fallback_exc).__name__,
             )
-            return await llm_json_call(prompt=prompt, system=system, model="gpt-4o-mini", provider="openai")
+            raise fallback_exc

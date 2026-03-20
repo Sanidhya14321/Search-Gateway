@@ -23,11 +23,19 @@ export function LoginForm() {
 
     setLoading(false);
     if (authError) {
+      if (authError.status === 429) {
+        setError("Too many sign-in attempts. Please wait a minute and try again.");
+        return;
+      }
+      if (authError.message.toLowerCase().includes("email not confirmed")) {
+        setError("This account is still marked unconfirmed. If you recently disabled email confirmation, create a new account or mark this user as confirmed in Supabase Auth users.");
+        return;
+      }
       setError(authError.message);
       return;
     }
 
-    router.push(redirect);
+    router.replace(redirect);
     router.refresh();
   }
 
