@@ -105,7 +105,7 @@ async def seeded_source_and_chunks(db_pool: asyncpg.Pool, seeded_company: dict) 
             seeded_company["id"],
             "company",
             "https://example.test/doc",
-            "website",
+            "company_website",
             "Alpha beta gamma",
             hashlib.sha256("Alpha beta gamma".encode("utf-8")).hexdigest(),
         )

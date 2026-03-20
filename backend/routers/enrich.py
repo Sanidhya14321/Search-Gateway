@@ -85,8 +85,20 @@ async def enrich_batch(
 
     async def _persist_job() -> None:
         try:
+            from inspect import isawaitable
             result = await run_agent("crm_enrichment", "batch enrichment", lead_list=request.leads, run_id=job_id)
-            pool = await get_pool()
+            pool_candidate = get_pool()
+            # Handle both async get_pool() (normal) and sync monkeypatches in tests
+            if isawaitable(pool_candidate):
+                pool = await pool_candidate
+            else:
+                pool = pool_candidate
+            
+            # Fallback: if pool is None, create it
+            if pool is None:
+                from backend.database import create_pool
+                pool = await create_pool()
+            
             async with pool.acquire() as conn:
                 await conn.execute(
                     "UPDATE agent_runs SET status='completed', output_payload=$2::jsonb, completed_at=NOW() WHERE run_id=$1",
@@ -109,7 +121,19 @@ async def enrich_batch(
                     json.dumps(result.get("final_response", {}), default=str),
                 )
         except Exception as exc:
-            pool = await get_pool()
+            from inspect import isawaitable
+            pool_candidate = get_pool()
+            # Handle both async get_pool() (normal) and sync monkeypatches in tests
+            if isawaitable(pool_candidate):
+                pool = await pool_candidate
+            else:
+                pool = pool_candidate
+            
+            # Fallback: if pool is None, create it
+            if pool is None:
+                from backend.database import create_pool
+                pool = await create_pool()
+            
             async with pool.acquire() as conn:
                 await conn.execute(
                     "UPDATE agent_runs SET status='failed', error_message=$2, completed_at=NOW() WHERE run_id=$1",

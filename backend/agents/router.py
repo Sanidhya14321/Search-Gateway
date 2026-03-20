@@ -90,7 +90,17 @@ async def run_agent(workflow_name: str, query: str, **kwargs) -> CRMindState:
 
     run_id = str(kwargs.get("run_id") or uuid4())
     pool_candidate = get_pool()
-    pool = await pool_candidate if isawaitable(pool_candidate) else pool_candidate
+    # Handle both async get_pool() (normal) and sync monkeypatches in tests
+    if isawaitable(pool_candidate):
+        pool = await pool_candidate
+    else:
+        pool = pool_candidate
+    
+    # Fallback: if pool is None, create it
+    if pool is None:
+        from backend.database import create_pool
+        pool = await create_pool()
+    
     started = time.perf_counter()
     async with pool.acquire() as db:
         query_hash = make_query_hash(query, selected_workflow)
