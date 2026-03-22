@@ -48,7 +48,10 @@ export function SignupForm() {
 
     // If email confirmation is disabled, Supabase returns a session immediately.
     if (data.session) {
-      window.location.assign(redirect);
+      // Give session cookies a moment to settle, then redirect
+      setTimeout(() => {
+        router.push(redirect);
+      }, 300);
       return;
     }
 

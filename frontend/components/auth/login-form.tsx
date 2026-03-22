@@ -35,16 +35,10 @@ export function LoginForm() {
       return;
     }
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      setError("Signed in, but session is not ready yet. Please try again.");
-      return;
-    }
-
-    window.location.assign(redirect);
+    // Give session cookies a moment to settle, then redirect
+    setTimeout(() => {
+      router.push(redirect);
+    }, 300);
   }
 
   return (

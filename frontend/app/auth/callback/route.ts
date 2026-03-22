@@ -40,8 +40,16 @@ export async function GET(request: Request) {
       },
     );
 
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    
+    // Return error page if code exchange fails
+    if (error) {
+      const errorUrl = new URL("/login", origin);
+      errorUrl.searchParams.set("error", error.message);
+      return NextResponse.redirect(errorUrl);
+    }
   }
 
+  // Redirect to the requested location or dashboard
   return NextResponse.redirect(`${origin}${redirect}`);
 }
