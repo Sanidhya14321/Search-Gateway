@@ -1,9 +1,10 @@
+from backend.agents import llm_client
 from backend.agents.state import CRMindState
-from backend.agents.llm_client import llm_json_call_with_fallback
 from backend.services.retrieval.context_assembler import assemble_context
 
-# Backward-compatible alias for tests and older call sites.
-llm_json_call = llm_json_call_with_fallback
+async def llm_json_call(prompt: str, system: str = "", model=None):
+    # Keep an indirection so tests can patch either this symbol or llm_client.
+    return await llm_client.llm_json_call_with_fallback(prompt, system=system, model=model)
 
 
 async def synthesize_node(state: CRMindState) -> dict:

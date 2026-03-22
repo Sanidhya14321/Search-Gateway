@@ -52,8 +52,9 @@ export async function middleware(request: NextRequest) {
   );
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   const pathname = request.nextUrl.pathname;
   const isProtected = PROTECTED_PATHS.some((path) => pathname.startsWith(path));
@@ -62,7 +63,8 @@ export async function middleware(request: NextRequest) {
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("redirect", pathname);
+    const fullTarget = `${pathname}${request.nextUrl.search || ""}`;
+    url.searchParams.set("redirect", fullTarget);
     return NextResponse.redirect(url);
   }
 

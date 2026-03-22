@@ -1,5 +1,6 @@
 import asyncpg
 import pgvector.asyncpg
+from inspect import isawaitable
 
 from backend.config import settings
 
@@ -32,8 +33,29 @@ async def get_pool() -> asyncpg.Pool:
     return _pool
 
 
+async def resolve_pool(pool_candidate: object | None = None) -> asyncpg.Pool:
+    """Resolve a pool from async/sync candidates, with lazy fallback.
+
+    This keeps runtime code and tests compatible when get_pool is monkeypatched
+    to a synchronous lambda returning a pool.
+    """
+    candidate = get_pool() if pool_candidate is None else pool_candidate
+    pool = await candidate if isawaitable(candidate) else candidate
+    if pool is None:
+        pool = await create_pool()
+    return pool
+
+
 async def close_pool() -> None:
     global _pool
     if _pool is not None:
-        await _pool.close()
+        try:
+            await _pool.close()
+        except RuntimeError as exc:
+            # Can happen in test teardown when an orphan task kept a pool bound
+            # to a loop that is already closed.
+            if "Event loop is closed" in str(exc):
+                _pool.terminate()
+            else:
+                raise
         _pool = None

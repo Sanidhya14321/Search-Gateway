@@ -3,11 +3,12 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.agents.router import run_agent
 from backend.database import get_pool
+from backend.database import resolve_pool
 from backend.dependencies import get_db_connection
 from backend.middleware.auth import AuthenticatedUser, get_current_user
 
@@ -45,6 +46,7 @@ async def enrich_endpoint(
 @router.post("/batch")
 async def enrich_batch(
     request: BatchEnrichRequest,
+    background_tasks: BackgroundTasks,
     db=Depends(get_db_connection),
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
@@ -85,20 +87,9 @@ async def enrich_batch(
 
     async def _persist_job() -> None:
         try:
-            from inspect import isawaitable
             result = await run_agent("crm_enrichment", "batch enrichment", lead_list=request.leads, run_id=job_id)
-            pool_candidate = get_pool()
-            # Handle both async get_pool() (normal) and sync monkeypatches in tests
-            if isawaitable(pool_candidate):
-                pool = await pool_candidate
-            else:
-                pool = pool_candidate
-            
-            # Fallback: if pool is None, create it
-            if pool is None:
-                from backend.database import create_pool
-                pool = await create_pool()
-            
+            pool = await resolve_pool(get_pool())
+
             async with pool.acquire() as conn:
                 await conn.execute(
                     "UPDATE agent_runs SET status='completed', output_payload=$2::jsonb, completed_at=NOW() WHERE run_id=$1",
@@ -116,43 +107,37 @@ async def enrich_batch(
                     WHERE id=$1::uuid
                     """,
                     enrichment_job_id,
-                    len((result.get("final_response") or {}).get("items", [])) if isinstance(result.get("final_response"), dict) else 0,
+                    len((result.get("final_response") or {}).get("enriched_rows", []))
+                    if isinstance(result.get("final_response"), dict)
+                    else 0,
                     len((result.get("final_response") or {}).get("flagged", [])) if isinstance(result.get("final_response"), dict) else 0,
                     json.dumps(result.get("final_response", {}), default=str),
                 )
         except Exception as exc:
-            from inspect import isawaitable
-            pool_candidate = get_pool()
-            # Handle both async get_pool() (normal) and sync monkeypatches in tests
-            if isawaitable(pool_candidate):
-                pool = await pool_candidate
-            else:
-                pool = pool_candidate
-            
-            # Fallback: if pool is None, create it
-            if pool is None:
-                from backend.database import create_pool
-                pool = await create_pool()
-            
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE agent_runs SET status='failed', error_message=$2, completed_at=NOW() WHERE run_id=$1",
-                    job_id,
-                    str(exc),
-                )
-                await conn.execute(
-                    """
-                    UPDATE user_enrichment_jobs
-                    SET status='failed',
-                        error_message=$2,
-                        completed_at=NOW()
-                    WHERE id=$1::uuid
-                    """,
-                    enrichment_job_id,
-                    str(exc),
-                )
+            try:
+                pool = await resolve_pool(get_pool())
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE agent_runs SET status='failed', error_message=$2, completed_at=NOW() WHERE run_id=$1",
+                        job_id,
+                        str(exc),
+                    )
+                    await conn.execute(
+                        """
+                        UPDATE user_enrichment_jobs
+                        SET status='failed',
+                            error_message=$2,
+                            completed_at=NOW()
+                        WHERE id=$1::uuid
+                        """,
+                        enrichment_job_id,
+                        str(exc),
+                    )
+            except RuntimeError:
+                # Avoid leaking teardown-time event loop errors in tests.
+                return
 
-    asyncio.create_task(_persist_job())
+    background_tasks.add_task(_persist_job)
 
     return {
         "job_id": job_id,

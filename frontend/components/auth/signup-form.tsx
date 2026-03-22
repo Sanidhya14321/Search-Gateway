@@ -21,11 +21,17 @@ export function SignupForm() {
     setLoading(true);
 
     const supabase = createBrowserSupabaseClient();
+    const callbackPath = `/auth/callback?next=${encodeURIComponent(redirect)}`;
+    const emailRedirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${callbackPath}`
+        : undefined;
+
     const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}${redirect}` : undefined,
+        emailRedirectTo,
       },
     });
 
@@ -42,8 +48,7 @@ export function SignupForm() {
 
     // If email confirmation is disabled, Supabase returns a session immediately.
     if (data.session) {
-      router.replace(redirect);
-      router.refresh();
+      window.location.assign(redirect);
       return;
     }
 

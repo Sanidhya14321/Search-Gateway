@@ -7,6 +7,7 @@ from backend.agents.nodes.synthesize import synthesize_node
 from backend.agents.nodes.vector_search_node import vector_search_node
 from backend.agents.state import CRMindState
 from backend.database import get_pool
+from backend.database import resolve_pool
 
 
 async def fetch_signals_node(state: CRMindState) -> dict:
@@ -14,7 +15,7 @@ async def fetch_signals_node(state: CRMindState) -> dict:
     if not entity_id:
         return {"signals": [], "steps_log": state.get("steps_log", []) + ["[fetch_signals] no entity"]}
 
-    pool = await get_pool()
+    pool = await resolve_pool(get_pool())
     async with pool.acquire() as db:
         rows = await db.fetch(
             """
@@ -36,7 +37,7 @@ async def fetch_people_changes_node(state: CRMindState) -> dict:
     if not entity_id:
         return {"people_changes": [], "steps_log": state.get("steps_log", []) + ["[fetch_people_changes] no entity"]}
 
-    pool = await get_pool()
+    pool = await resolve_pool(get_pool())
     async with pool.acquire() as db:
         rows = await db.fetch(
             """

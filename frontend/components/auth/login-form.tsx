@@ -35,8 +35,16 @@ export function LoginForm() {
       return;
     }
 
-    router.replace(redirect);
-    router.refresh();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      setError("Signed in, but session is not ready yet. Please try again.");
+      return;
+    }
+
+    window.location.assign(redirect);
   }
 
   return (

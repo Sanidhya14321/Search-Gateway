@@ -8,6 +8,7 @@ from backend.agents.nodes.synthesize import synthesize_node
 from backend.agents.nodes.vector_search_node import vector_search_node
 from backend.agents.state import CRMindState
 from backend.database import get_pool
+from backend.database import resolve_pool
 
 
 async def search_people_db_node(state: CRMindState) -> dict:
@@ -20,7 +21,7 @@ async def search_people_db_node(state: CRMindState) -> dict:
     title_keywords = parsed.get("title_keywords") or []
     title_patterns = [f"%{keyword}%" for keyword in title_keywords]
 
-    pool = await get_pool()
+    pool = await resolve_pool(get_pool())
     async with pool.acquire() as db:
         rows = await db.fetch(
             """

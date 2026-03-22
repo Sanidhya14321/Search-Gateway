@@ -12,6 +12,7 @@ from backend.agents.ops_debug import build_ops_debug_graph
 from backend.agents.research import build_research_graph
 from backend.agents.state import CRMindState
 from backend.database import get_pool
+from backend.database import resolve_pool
 from backend.config import settings
 from backend.services.query_cache import get_cached, make_query_hash, set_cached
 
@@ -89,17 +90,7 @@ async def run_agent(workflow_name: str, query: str, **kwargs) -> CRMindState:
     }
 
     run_id = str(kwargs.get("run_id") or uuid4())
-    pool_candidate = get_pool()
-    # Handle both async get_pool() (normal) and sync monkeypatches in tests
-    if isawaitable(pool_candidate):
-        pool = await pool_candidate
-    else:
-        pool = pool_candidate
-    
-    # Fallback: if pool is None, create it
-    if pool is None:
-        from backend.database import create_pool
-        pool = await create_pool()
+    pool = await resolve_pool(get_pool())
     
     started = time.perf_counter()
     async with pool.acquire() as db:

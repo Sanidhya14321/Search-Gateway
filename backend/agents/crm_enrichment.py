@@ -4,6 +4,7 @@ from backend.agents.graph_runtime import END, START, StateGraph
 
 from backend.agents.state import CRMindState
 from backend.database import get_pool
+from backend.database import resolve_pool
 from backend.services.entity_resolver import resolve_entity
 
 
@@ -33,7 +34,7 @@ async def batch_resolve_node(state: CRMindState) -> dict:
 
 async def check_existing_node(state: CRMindState) -> dict:
     resolved_batch = state.get("resolved_batch", [])
-    pool = await get_pool()
+    pool = await resolve_pool(get_pool())
     to_enrich = []
     skipped_fresh = 0
 
@@ -94,7 +95,7 @@ async def write_back_node(state: CRMindState) -> dict:
     if not rows:
         return {"write_back_count": 0, "steps_log": state.get("steps_log", []) + ["[write_back] nothing to persist"]}
 
-    pool = await get_pool()
+    pool = await resolve_pool(get_pool())
     async with pool.acquire() as db:
         for row in rows:
             company_name = str(row.get("company", "")).strip() or "Unknown"
