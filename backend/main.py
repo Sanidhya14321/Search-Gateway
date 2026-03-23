@@ -1,5 +1,8 @@
+import os
 from contextlib import asynccontextmanager
 
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,8 +15,25 @@ from backend.routers import accounts, agents, auth, contacts, crawl, enrich, ent
 from backend.utils.exceptions import CRMindError
 
 
+def run_migrations() -> None:
+    cfg = Config("alembic.ini")
+    direct_url = settings.database_url_direct or settings.database_url
+    normalized_url = (
+        direct_url.replace("postgres://", "postgresql://", 1)
+        if direct_url.startswith("postgres://")
+        else direct_url
+    )
+    # Alembic env.py reads DATABASE_URL_DIRECT / DATABASE_URL. Keep both in sync for startup migration runs.
+    os.environ["DATABASE_URL_DIRECT"] = normalized_url
+    os.environ["DATABASE_URL"] = normalized_url
+    logger.info("migrations_start | target=head")
+    command.upgrade(cfg, "head")
+    logger.info("migrations_done | target=head")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    run_migrations()
     await create_pool()
     try:
         yield

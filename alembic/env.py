@@ -10,6 +10,8 @@ if config.config_file_name is not None:
 
 direct_url = os.getenv("DATABASE_URL_DIRECT") or os.getenv("DATABASE_URL")
 if direct_url:
+    if direct_url.startswith("postgres://"):
+        direct_url = direct_url.replace("postgres://", "postgresql://", 1)
     config.set_main_option("sqlalchemy.url", direct_url)
 
 
