@@ -40,7 +40,17 @@ async def resolve_pool(pool_candidate: object | None = None) -> asyncpg.Pool:
     to a synchronous lambda returning a pool.
     """
     candidate = get_pool() if pool_candidate is None else pool_candidate
-    pool = await candidate if isawaitable(candidate) else candidate
+
+    # asyncpg.Pool implements __await__, but awaiting an already-created pool
+    # is not the same as resolving a pool coroutine and can corrupt usage.
+    if isinstance(candidate, asyncpg.Pool):
+        pool = candidate
+    else:
+        pool = await candidate if isawaitable(candidate) else candidate
+
+    if isinstance(pool, asyncpg.Pool):
+        return pool
+
     if pool is None:
         pool = await create_pool()
     return pool

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { hasSupabasePublicEnv, normalizeInternalRedirectPath } from "@/lib/supabase/env";
 
 type CookieToSet = {
   name: string;
@@ -30,11 +31,16 @@ const PROTECTED_PATHS = [
 ];
 
 export async function middleware(request: NextRequest) {
+  if (!hasSupabasePublicEnv()) {
+    // Fail open so auth pages remain reachable while env is being configured.
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
     {
       cookies: {
         getAll() {
@@ -52,9 +58,8 @@ export async function middleware(request: NextRequest) {
   );
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
   const isProtected = PROTECTED_PATHS.some((path) => pathname.startsWith(path));
@@ -63,7 +68,7 @@ export async function middleware(request: NextRequest) {
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    const fullTarget = `${pathname}${request.nextUrl.search || ""}`;
+    const fullTarget = normalizeInternalRedirectPath(`${pathname}${request.nextUrl.search || ""}`);
     url.searchParams.set("redirect", fullTarget);
     return NextResponse.redirect(url);
   }

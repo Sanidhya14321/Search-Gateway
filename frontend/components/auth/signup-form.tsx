@@ -3,16 +3,25 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { hasSupabasePublicEnv, normalizeInternalRedirectPath } from "@/lib/supabase/env";
 
 export function SignupForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const redirect = params.get("redirect") || "/dashboard";
+  const redirect = normalizeInternalRedirectPath(params.get("redirect"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  if (!hasSupabasePublicEnv()) {
+    return (
+      <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+        Authentication is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in frontend/.env.local.
+      </p>
+    );
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -22,10 +31,13 @@ export function SignupForm() {
 
     const supabase = createBrowserSupabaseClient();
     const callbackPath = `/auth/callback?next=${encodeURIComponent(redirect)}`;
+    const configuredSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "").trim();
     const emailRedirectTo =
-      typeof window !== "undefined"
-        ? `${window.location.origin}${callbackPath}`
-        : undefined;
+      configuredSiteUrl
+        ? `${configuredSiteUrl.replace(/\/+$/, "")}${callbackPath}`
+        : typeof window !== "undefined"
+          ? `${window.location.origin}${callbackPath}`
+          : undefined;
 
     const { data, error: authError } = await supabase.auth.signUp({
       email,

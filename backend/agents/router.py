@@ -1,8 +1,10 @@
 import json
 import time
 from collections.abc import Sequence
-from inspect import isawaitable
 from uuid import uuid4
+
+import asyncpg
+from loguru import logger
 
 from backend.agents.account_brief import build_account_brief_graph
 from backend.agents.crm_enrichment import build_crm_enrichment_graph
@@ -93,61 +95,80 @@ async def run_agent(workflow_name: str, query: str, **kwargs) -> CRMindState:
     pool = await resolve_pool(get_pool())
     
     started = time.perf_counter()
-    async with pool.acquire() as db:
-        query_hash = make_query_hash(query, selected_workflow)
-        cached = await get_cached(query_hash, db)
-        if cached is not None:
-            return {
-                **initial_state,
-                "final_response": cached,
-                "cache_hit": True,
-                "steps_log": ["[cache] hit"],
-                "citations": cached.get("citations", []) if isinstance(cached, dict) else [],
-            }
+    query_hash = make_query_hash(query, selected_workflow)
+    try:
+        async with pool.acquire() as db:
+            cached = await get_cached(query_hash, db)
+            if cached is not None:
+                return {
+                    **initial_state,
+                    "final_response": cached,
+                    "cache_hit": True,
+                    "steps_log": ["[cache] hit"],
+                    "citations": cached.get("citations", []) if isinstance(cached, dict) else [],
+                }
 
-        await db.execute(
-            """
-            INSERT INTO agent_runs (run_id, workflow_name, status, input_payload, trace_id)
-            VALUES ($1, $2, 'running', $3::jsonb, $4)
-            ON CONFLICT (run_id) DO NOTHING
-            """,
-            run_id,
+            await db.execute(
+                """
+                INSERT INTO agent_runs (run_id, workflow_name, status, input_payload, trace_id)
+                VALUES ($1, $2, 'running', $3::jsonb, $4)
+                ON CONFLICT (run_id) DO NOTHING
+                """,
+                run_id,
+                selected_workflow,
+                json.dumps({"query": query, **kwargs}, default=str),
+                kwargs.get("trace_id"),
+            )
+    except (RuntimeError, asyncpg.InterfaceError, asyncpg.ConnectionDoesNotExistError, asyncpg.PostgresError) as exc:
+        logger.warning(
+            "agent_preflight_degraded | workflow={} run_id={} error={}",
             selected_workflow,
-            json.dumps({"query": query, **kwargs}, default=str),
-            kwargs.get("trace_id"),
+            run_id,
+            str(exc),
         )
 
     try:
         result = await graph.ainvoke(initial_state)
         duration_ms = int((time.perf_counter() - started) * 1000)
 
-        async with pool.acquire() as db:
-            await set_cached(
-                query_hash=query_hash,
-                query_text=query,
-                workflow_name=selected_workflow,
-                response=result.get("final_response", {}),
-                ttl_seconds=settings.cache_ttl_seconds,
-                db=db,
-            )
-            await db.execute(
-                """
-                UPDATE agent_runs
-                SET status='completed', output_payload=$2::jsonb, steps_log=$3::jsonb,
-                    duration_ms=$4, completed_at=NOW()
-                WHERE run_id=$1
-                """,
-                run_id,
-                json.dumps(result.get("final_response", {}), default=str),
-                json.dumps(result.get("steps_log", []), default=str),
-                duration_ms,
-            )
-        return result
-    except Exception as exc:
-        async with pool.acquire() as db:
-            await db.execute(
-                "UPDATE agent_runs SET status='failed', error_message=$2, completed_at=NOW() WHERE run_id=$1",
+        try:
+            async with pool.acquire() as db:
+                await set_cached(
+                    query_hash=query_hash,
+                    query_text=query,
+                    workflow_name=selected_workflow,
+                    response=result.get("final_response", {}),
+                    ttl_seconds=settings.cache_ttl_seconds,
+                    db=db,
+                )
+                await db.execute(
+                    """
+                    UPDATE agent_runs
+                    SET status='completed', output_payload=$2::jsonb, steps_log=$3::jsonb,
+                        duration_ms=$4, completed_at=NOW()
+                    WHERE run_id=$1
+                    """,
+                    run_id,
+                    json.dumps(result.get("final_response", {}), default=str),
+                    json.dumps(result.get("steps_log", []), default=str),
+                    duration_ms,
+                )
+        except (RuntimeError, asyncpg.InterfaceError, asyncpg.ConnectionDoesNotExistError, asyncpg.PostgresError) as exc:
+            logger.warning(
+                "agent_post_persist_degraded | workflow={} run_id={} error={}",
+                selected_workflow,
                 run_id,
                 str(exc),
             )
+        return result
+    except Exception as exc:
+        try:
+            async with pool.acquire() as db:
+                await db.execute(
+                    "UPDATE agent_runs SET status='failed', error_message=$2, completed_at=NOW() WHERE run_id=$1",
+                    run_id,
+                    str(exc),
+                )
+        except (RuntimeError, asyncpg.InterfaceError, asyncpg.ConnectionDoesNotExistError, asyncpg.PostgresError):
+            logger.warning("agent_failure_unpersisted | workflow={} run_id={}", selected_workflow, run_id)
         raise

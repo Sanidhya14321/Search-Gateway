@@ -34,10 +34,11 @@ configure_logging()
 
 app = FastAPI(title="CRMind API", version="1.0.0", lifespan=lifespan)
 app.middleware("http")(trace_timing_middleware)
+cors_origins = settings.cors_allowed_origins_list or ["http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials="*" not in cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

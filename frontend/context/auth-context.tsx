@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { hasSupabasePublicEnv } from "@/lib/supabase/env";
 
 type AuthContextValue = {
   user: User | null;
@@ -16,10 +17,18 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const [loading, setLoading] = useState(hasSupabasePublicEnv());
+  const supabase = useMemo(
+    () => (hasSupabasePublicEnv() ? createBrowserSupabaseClient() : null),
+    [],
+  );
 
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
 
     supabase.auth.getSession().then(({ data }) => {
@@ -44,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   async function signOut() {
+    if (!supabase) return;
     await supabase.auth.signOut();
   }
 

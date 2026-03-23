@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { getSupabasePublicEnv, normalizeInternalRedirectPath } from "@/lib/supabase/env";
 
 type CookieToSet = {
   name: string;
@@ -19,13 +20,15 @@ type CookieToSet = {
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const redirect = searchParams.get("next") ?? "/dashboard";
+  const redirect = normalizeInternalRedirectPath(searchParams.get("next"));
+
+  const { url, anonKey } = getSupabasePublicEnv();
 
   if (code) {
     const cookieStore = cookies();
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      url,
+      anonKey,
       {
         cookies: {
           getAll() {
