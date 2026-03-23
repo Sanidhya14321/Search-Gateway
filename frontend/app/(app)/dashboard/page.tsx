@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { apiGet } from "@/lib/api/client";
 
 interface RecentSearch {
   id: string;
@@ -27,13 +28,8 @@ export default function DashboardPage() {
       // Try to fetch recent searches from API
       if (authUser?.id) {
         try {
-          const resp = await fetch("/api/v1/user/history", {
-            headers: { Authorization: `Bearer ${authUser.id}` },
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            setRecentSearches(data.items?.slice(0, 5) || []);
-          }
+          const data = await apiGet("/api/v1/user/history?limit=5&offset=0");
+          setRecentSearches(data.items || []);
         } catch (e) {
           console.error("Failed to fetch history:", e);
         }
@@ -98,9 +94,9 @@ export default function DashboardPage() {
         <h2 className="font-display text-2xl font-bold text-stone-100">Recent Searches</h2>
         {recentSearches.length > 0 ? (
           <div className="space-y-2">
-            {recentSearches.map((search) => (
+            {recentSearches.map((search, idx) => (
               <Link
-                key={search.id}
+                key={`${search.created_at || idx}-${search.query || "q"}`}
                 href={`/search?q=${encodeURIComponent(search.query)}`}
                 className="block rounded-lg border border-stone-700 p-4 transition hover:bg-stone-800"
               >

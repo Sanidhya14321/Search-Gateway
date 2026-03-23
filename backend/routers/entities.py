@@ -15,6 +15,12 @@ async def entity_detail(
     company = await db.fetchrow("SELECT * FROM companies WHERE canonical_id=$1", canonical_id)
     person = None if company else await db.fetchrow("SELECT * FROM people WHERE canonical_id=$1", canonical_id)
 
+    # Accept UUID paths from older frontend links as a fallback.
+    if company is None and person is None:
+        company = await db.fetchrow("SELECT * FROM companies WHERE id::text=$1", canonical_id)
+        if company is None:
+            person = await db.fetchrow("SELECT * FROM people WHERE id::text=$1", canonical_id)
+
     if company:
         entity_id = company["id"]
         entity_type = "company"

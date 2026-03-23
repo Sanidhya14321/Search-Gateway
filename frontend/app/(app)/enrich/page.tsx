@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { apiGet, apiPost } from "@/lib/api/client";
 
 interface Lead {
   name: string;
@@ -43,39 +43,19 @@ export default function EnrichPage() {
     setError("");
 
     try {
-      const supabase = createBrowserSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
-      const resp = await fetch("/api/v1/enrich/batch", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.user.id}`,
-        },
-        body: JSON.stringify({ leads }),
-      });
-
-      if (!resp.ok) throw new Error("Failed to submit enrichment");
-
-      const data = await resp.json();
+      const data = await apiPost("/api/v1/enrich/batch", { leads });
       setJobId(data.job_id);
       setStatus("polling");
 
       // Poll for completion
       let attempts = 0;
       while (attempts < 60) {
-        const checkResp = await fetch(`/api/v1/enrich/batch/${data.job_id}`, {
-          headers: { Authorization: `Bearer ${session?.user.id}` },
-        });
+        const jobData = await apiGet(`/api/v1/enrich/batch/${data.job_id}`);
+        setJobStatus(jobData);
 
-        if (checkResp.ok) {
-          const jobData = await checkResp.json();
-          setJobStatus(jobData);
-
-          if (jobData.status === "completed") {
-            setStatus("idle");
-            break;
-          }
+        if (jobData.status === "completed") {
+          setStatus("idle");
+          break;
         }
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -155,15 +135,15 @@ export default function EnrichPage() {
       {jobStatus && (
         <div className="rounded-lg border border-stone-700 bg-stone-900/50 p-6">
           <h2 className="font-semibold text-stone-100">Job Status: {jobStatus.status}</h2>
-          {jobStatus.status === "completed" && jobStatus.enriched_rows && (
+          {jobStatus.status === "completed" && jobStatus.result?.enriched_rows && (
             <div className="mt-4 space-y-2">
-              {jobStatus.enriched_rows.map((row: any, idx: number) => (
+              {jobStatus.result.enriched_rows.map((row: any, idx: number) => (
                 <Link
                   key={idx}
-                  href={`/entity/${row.canonical_id}`}
+                  href={`/entity/${row.canonical_id || row.entity_id || ""}`}
                   className="block rounded-lg border border-stone-700 p-3 text-sm hover:bg-stone-800"
                 >
-                  {row.canonical_name}
+                  {row.canonical_name || row.full_name || row.canonical_id || "Enriched row"}
                 </Link>
               ))}
             </div>

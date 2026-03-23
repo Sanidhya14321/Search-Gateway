@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { apiDelete, apiGet, apiPost } from "@/lib/api/client";
 
 interface ApiKey {
-  key_id: string;
+  id: string;
   key_prefix: string;
+  name: string;
   created_at: string;
   last_used_at: string | null;
 }
@@ -18,21 +19,11 @@ export default function ApiKeysPage() {
 
   useEffect(() => {
     async function loadKeys() {
-      const supabase = createBrowserSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (user?.id) {
-        try {
-          const resp = await fetch(`/api/v1/auth/api-keys`, {
-            headers: { Authorization: `Bearer ${user.id}` },
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            setApiKeys(data.keys || []);
-          }
-        } catch (e) {
-          console.error("Failed to load API keys:", e);
-        }
+      try {
+        const data = await apiGet("/api/v1/auth/api-keys");
+        setApiKeys(data.api_keys || []);
+      } catch (e) {
+        console.error("Failed to load API keys:", e);
       }
 
       setLoading(false);
@@ -43,20 +34,22 @@ export default function ApiKeysPage() {
 
   const createNewKey = async () => {
     setCreating(true);
-    const supabase = createBrowserSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
 
     try {
-      const resp = await fetch(`/api/v1/auth/api-keys`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${user?.id}` },
+      const data = await apiPost(`/api/v1/auth/api-keys`, {
+        name: `UI Key ${new Date().toISOString().slice(0, 10)}`,
       });
-
-      if (resp.ok) {
-        const data = await resp.json();
-        setNewKey(data.api_key);
-        setApiKeys([...apiKeys, { key_id: data.key_id, key_prefix: data.key_prefix, created_at: new Date().toISOString(), last_used_at: null }]);
-      }
+      setNewKey(data.raw_key);
+      setApiKeys([
+        ...apiKeys,
+        {
+          id: data.id,
+          key_prefix: data.key_prefix,
+          name: data.name,
+          created_at: data.created_at,
+          last_used_at: null,
+        },
+      ]);
     } catch (e) {
       console.error("Failed to create key:", e);
     }
@@ -65,16 +58,10 @@ export default function ApiKeysPage() {
   };
 
   const revokeKey = async (keyId: string) => {
-    const supabase = createBrowserSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
     try {
-      await fetch(`/api/v1/auth/api-keys/${keyId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${user?.id}` },
-      });
+      await apiDelete(`/api/v1/auth/api-keys/${keyId}`);
 
-      setApiKeys(apiKeys.filter((k) => k.key_id !== keyId));
+      setApiKeys(apiKeys.filter((k) => k.id !== keyId));
     } catch (e) {
       console.error("Failed to revoke key:", e);
     }
@@ -121,16 +108,17 @@ export default function ApiKeysPage() {
       {apiKeys.length > 0 ? (
         <div className="space-y-2">
           {apiKeys.map((key) => (
-            <div key={key.key_id} className="flex items-center justify-between rounded-lg border border-stone-700 bg-stone-900/50 p-4">
+            <div key={key.id} className="flex items-center justify-between rounded-lg border border-stone-700 bg-stone-900/50 p-4">
               <div>
                 <p className="font-mono text-sm text-stone-300">{key.key_prefix}...</p>
+                <p className="text-xs text-stone-400">{key.name}</p>
                 <p className="text-xs text-stone-500">
                   Created {new Date(key.created_at).toLocaleDateString()}
                   {key.last_used_at && ` · Last used ${new Date(key.last_used_at).toLocaleDateString()}`}
                 </p>
               </div>
               <button
-                onClick={() => revokeKey(key.key_id)}
+                onClick={() => revokeKey(key.id)}
                 className="rounded-lg border border-red-600 px-3 py-1 text-xs text-red-300 hover:bg-red-900/20"
               >
                 Revoke

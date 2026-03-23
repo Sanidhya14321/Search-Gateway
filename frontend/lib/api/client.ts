@@ -29,6 +29,19 @@ async function authHeaders() {
   };
 }
 
+async function apiRequest(path: string, init: RequestInit = {}) {
+  const headers = await authHeaders();
+  const response = await fetch(buildApiUrl(path), {
+    ...init,
+    headers: {
+      ...headers,
+      ...(init.headers || {}),
+    },
+    cache: init.cache ?? "no-store",
+  });
+  return parseResponse(response);
+}
+
 async function parseResponse(response: Response) {
   if (response.ok) {
     return response.json();
@@ -39,21 +52,16 @@ async function parseResponse(response: Response) {
 }
 
 export async function apiGet(path: string) {
-  const headers = await authHeaders();
-  const response = await fetch(buildApiUrl(path), {
-    method: "GET",
-    headers,
-    cache: "no-store",
-  });
-  return parseResponse(response);
+  return apiRequest(path, { method: "GET" });
 }
 
 export async function apiPost(path: string, body: unknown) {
-  const headers = await authHeaders();
-  const response = await fetch(buildApiUrl(path), {
+  return apiRequest(path, {
     method: "POST",
-    headers,
     body: JSON.stringify(body),
   });
-  return parseResponse(response);
+}
+
+export async function apiDelete(path: string) {
+  return apiRequest(path, { method: "DELETE" });
 }

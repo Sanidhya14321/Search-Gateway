@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { apiGet } from "@/lib/api/client";
 
 const SIGNAL_COLORS: Record<string, string> = {
   hiring: "bg-emerald-900/50 text-emerald-300",
@@ -19,21 +19,26 @@ export default function SignalsPage() {
 
   useEffect(() => {
     async function loadSignals() {
-      const supabase = createBrowserSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      try {
+        const saved = await apiGet("/api/v1/user/saved?limit=20&offset=0");
+        const savedEntities = (saved.items || []) as Array<{ entity_id?: string; entity_name?: string }>;
 
-      if (user?.id) {
-        try {
-          const resp = await fetch(`/api/v1/signals`, {
-            headers: { Authorization: `Bearer ${user.id}` },
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            setSignals(data.items || []);
-          }
-        } catch (e) {
-          console.error("Failed to load signals:", e);
-        }
+        const signalResults = await Promise.all(
+          savedEntities
+            .filter((item) => Boolean(item.entity_id))
+            .map(async (item) => {
+              const response = await apiGet(`/api/v1/signals/${item.entity_id}?limit=10&offset=0`);
+              return (response.items || []).map((signal: any) => ({
+                ...signal,
+                entity_id: item.entity_id,
+                entity_name: item.entity_name,
+              }));
+            }),
+        );
+
+        setSignals(signalResults.flat());
+      } catch (e) {
+        console.error("Failed to load signals:", e);
       }
 
       setLoading(false);

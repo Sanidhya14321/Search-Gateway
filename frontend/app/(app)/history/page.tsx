@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { apiGet } from "@/lib/api/client";
 
 export default function HistoryPage() {
   const [searchHistory, setSearchHistory] = useState<any[]>([]);
@@ -10,21 +10,11 @@ export default function HistoryPage() {
 
   useEffect(() => {
     async function loadHistory() {
-      const supabase = createBrowserSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (user?.id) {
-        try {
-          const resp = await fetch(`/api/v1/user/history`, {
-            headers: { Authorization: `Bearer ${user.id}` },
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            setSearchHistory(data.items || []);
-          }
-        } catch (e) {
-          console.error("Failed to load history:", e);
-        }
+      try {
+        const data = await apiGet("/api/v1/user/history");
+        setSearchHistory(data.items || []);
+      } catch (e) {
+        console.error("Failed to load history:", e);
       }
 
       setLoading(false);
@@ -46,9 +36,9 @@ export default function HistoryPage() {
 
       {searchHistory.length > 0 ? (
         <div className="space-y-2">
-          {searchHistory.map((item: any) => (
+          {searchHistory.map((item: any, idx: number) => (
             <Link
-              key={item.id}
+              key={`${item.created_at || idx}-${item.query || "q"}`}
               href={`/search?q=${encodeURIComponent(item.query)}`}
               className="block rounded-lg border border-stone-700 bg-stone-900/50 p-4 transition hover:bg-stone-800"
             >
