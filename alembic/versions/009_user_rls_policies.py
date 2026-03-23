@@ -22,27 +22,71 @@ USER_TABLES = [
 
 
 def upgrade() -> None:
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.routines
+                WHERE routine_schema = 'auth' AND routine_name = 'uid'
+            ) THEN
+                RAISE NOTICE 'Skipping user RLS policy migration: auth.uid() is unavailable';
+                RETURN;
+            END IF;
+        END $$
+        """
+    )
+
     for table in USER_TABLES:
-        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         op.execute(
             f"""
-            CREATE POLICY \"{table}_user_isolation\"
-            ON {table}
-            USING (
-                user_id = (
-                    SELECT id FROM users
-                    WHERE supabase_user_id = auth.uid()
-                )
-            )
+            DO $$
+            BEGIN
+                IF to_regclass('public.{table}') IS NOT NULL THEN
+                    EXECUTE 'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY';
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_policies
+                    WHERE schemaname = 'public'
+                      AND tablename = '{table}'
+                      AND policyname = '{table}_user_isolation'
+                ) THEN
+                    EXECUTE '
+                        CREATE POLICY "{table}_user_isolation"
+                        ON {table}
+                        USING (
+                            user_id = (
+                                SELECT id FROM users
+                                WHERE supabase_user_id = auth.uid()
+                            )
+                        )
+                    ';
+                END IF;
+            END $$
             """
         )
 
-    op.execute("ALTER TABLE users ENABLE ROW LEVEL SECURITY")
     op.execute(
         """
-        CREATE POLICY "users_self_only"
-        ON users
-        USING (supabase_user_id = auth.uid())
+        DO $$
+        BEGIN
+            IF to_regclass('public.users') IS NOT NULL THEN
+                ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_policies
+                WHERE schemaname = 'public'
+                  AND tablename = 'users'
+                  AND policyname = 'users_self_only'
+            ) THEN
+                CREATE POLICY "users_self_only"
+                ON users
+                USING (supabase_user_id = auth.uid());
+            END IF;
+        END $$
         """
     )
 

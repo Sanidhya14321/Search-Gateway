@@ -15,7 +15,7 @@ depends_on = None
 def upgrade() -> None:
     op.execute(
         """
-        CREATE TABLE users (
+        CREATE TABLE IF NOT EXISTS users (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           supabase_user_id UUID UNIQUE NOT NULL,
           email VARCHAR(512) UNIQUE NOT NULL,
@@ -29,12 +29,12 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX idx_users_supabase_id ON users (supabase_user_id)")
-    op.execute("CREATE INDEX idx_users_email ON users (email)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_users_supabase_id ON users (supabase_user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)")
 
     op.execute(
         """
-        CREATE TABLE user_api_keys (
+        CREATE TABLE IF NOT EXISTS user_api_keys (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           key_hash VARCHAR(256) NOT NULL,
@@ -47,12 +47,12 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX idx_api_keys_user ON user_api_keys (user_id)")
-    op.execute("CREATE INDEX idx_api_keys_prefix ON user_api_keys (key_prefix)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON user_api_keys (user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON user_api_keys (key_prefix)")
 
     op.execute(
         """
-        CREATE TABLE user_search_history (
+        CREATE TABLE IF NOT EXISTS user_search_history (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           query TEXT NOT NULL,
@@ -66,12 +66,12 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX idx_search_history_user ON user_search_history (user_id, created_at DESC)")
-    op.execute("CREATE INDEX idx_search_history_entity ON user_search_history (entity_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_search_history_user ON user_search_history (user_id, created_at DESC)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_search_history_entity ON user_search_history (entity_id)")
 
     op.execute(
         """
-        CREATE TABLE user_saved_entities (
+        CREATE TABLE IF NOT EXISTS user_saved_entities (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           entity_id UUID NOT NULL,
@@ -84,12 +84,12 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX idx_saved_entities_user ON user_saved_entities (user_id, created_at DESC)")
-    op.execute("CREATE INDEX idx_saved_entities_tags ON user_saved_entities USING gin (tags)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_saved_entities_user ON user_saved_entities (user_id, created_at DESC)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_saved_entities_tags ON user_saved_entities USING gin (tags)")
 
     op.execute(
         """
-        CREATE TABLE user_saved_searches (
+        CREATE TABLE IF NOT EXISTS user_saved_searches (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           name VARCHAR(255) NOT NULL,
@@ -104,11 +104,11 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX idx_saved_searches_user ON user_saved_searches (user_id, created_at DESC)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_saved_searches_user ON user_saved_searches (user_id, created_at DESC)")
 
     op.execute(
         """
-        CREATE TABLE user_enrichment_jobs (
+        CREATE TABLE IF NOT EXISTS user_enrichment_jobs (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           job_name VARCHAR(255),
@@ -125,12 +125,12 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX idx_enrichment_jobs_user ON user_enrichment_jobs (user_id, created_at DESC)")
-    op.execute("CREATE INDEX idx_enrichment_jobs_status ON user_enrichment_jobs (status)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_enrichment_jobs_user ON user_enrichment_jobs (user_id, created_at DESC)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_enrichment_jobs_status ON user_enrichment_jobs (status)")
 
     op.execute(
         """
-        CREATE TABLE user_signal_feed (
+        CREATE TABLE IF NOT EXISTS user_signal_feed (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           signal_id UUID NOT NULL REFERENCES signals(id) ON DELETE CASCADE,
@@ -141,20 +141,34 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX idx_signal_feed_user ON user_signal_feed (user_id, is_read, created_at DESC)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_signal_feed_user ON user_signal_feed (user_id, is_read, created_at DESC)")
 
     op.execute(
         """
-        CREATE TRIGGER trg_users_updated_at
-          BEFORE UPDATE ON users
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at()
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_trigger WHERE tgname = 'trg_users_updated_at'
+          ) THEN
+            CREATE TRIGGER trg_users_updated_at
+              BEFORE UPDATE ON users
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+          END IF;
+        END $$
         """
     )
     op.execute(
         """
-        CREATE TRIGGER trg_saved_searches_updated_at
-          BEFORE UPDATE ON user_saved_searches
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at()
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_trigger WHERE tgname = 'trg_saved_searches_updated_at'
+          ) THEN
+            CREATE TRIGGER trg_saved_searches_updated_at
+              BEFORE UPDATE ON user_saved_searches
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+          END IF;
+        END $$
         """
     )
 
