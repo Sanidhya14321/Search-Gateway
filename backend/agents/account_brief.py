@@ -63,9 +63,7 @@ async def synthesize_brief_node(state: CRMindState) -> dict:
     # Prefer LLM-provided values only when they are non-empty.
     signal_timeline = response.get("signal_timeline") or response.get("signals") or state.get("signals", [])
     key_people = response.get("key_people") or response.get("people") or state.get("people_changes", [])
-    why_reach_out_now = response.get("why_reach_out_now") or (
-        "Explain why this matters for a sales team reaching out to this account."
-    )
+    why_reach_out_now = response.get("why_reach_out_now") or ""
 
     response["signal_timeline"] = signal_timeline
     response["key_people"] = key_people

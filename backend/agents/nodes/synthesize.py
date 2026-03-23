@@ -10,6 +10,18 @@ async def llm_json_call(prompt: str, system: str = "", model=None):
 async def synthesize_node(state: CRMindState) -> dict:
     context = assemble_context([])
     ranked = state.get("ranked_chunks", [])
+    if not ranked:
+        return {
+            "steps_log": state.get("steps_log", []) + ["[synthesize] no ranked evidence; returning degraded fallback"],
+            "final_response": {
+                "summary": "Insufficient indexed evidence to answer this query.",
+                "facts": [],
+                "people": [],
+                "signals": [],
+                "degraded": True,
+            },
+        }
+
     if ranked:
         try:
             from backend.services.retrieval.vector_search import ChunkResult
@@ -29,6 +41,13 @@ async def synthesize_node(state: CRMindState) -> dict:
         "Return JSON with keys: summary, facts, people, signals, degraded."
     )
     synthesis = await llm_json_call(prompt, system=system_prompt)
+    if not isinstance(synthesis, dict):
+        synthesis = {}
+    synthesis.setdefault("facts", [])
+    synthesis.setdefault("people", [])
+    synthesis.setdefault("signals", [])
+    synthesis.setdefault("summary", "Insufficient indexed evidence to answer this query.")
+    synthesis.setdefault("degraded", False)
 
     return {
         "steps_log": state.get("steps_log", []) + ["[synthesize] synthesized grounded response"],

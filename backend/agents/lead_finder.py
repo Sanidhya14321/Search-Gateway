@@ -94,9 +94,9 @@ def _resolution_gate(state: CRMindState) -> str:
 
 async def _entity_not_found_node(state: CRMindState) -> dict:
     return {
-        "error": "Entity not resolved",
-        "final_response": {"summary": "Entity resolution failed", "people": [], "facts": [], "signals": [], "degraded": True},
-        "steps_log": state.get("steps_log", []) + ["[resolve_company] confidence below threshold"],
+        "degraded": True,
+        "steps_log": state.get("steps_log", [])
+        + ["[resolve_company] confidence below threshold; continuing with query-wide retrieval"],
     }
 
 
@@ -124,7 +124,7 @@ def build_lead_finder_graph():
             "not_found": "entity_not_found",
         },
     )
-    graph.add_edge("entity_not_found", END)
+    graph.add_edge("entity_not_found", "search_people_db")
     graph.add_edge("search_people_db", "vector_search")
     graph.add_edge("vector_search", "merge_dedup")
     graph.add_edge("merge_dedup", "verify_sources")
