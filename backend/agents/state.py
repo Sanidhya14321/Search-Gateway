@@ -25,3 +25,16 @@ class CRMindState(TypedDict, total=False):
 
     _parsed_filters: dict[str, Any]
     _sub_questions: list[str]
+
+    # Account brief workflow intermediates
+    signals: list[dict[str, Any]]
+    people_changes: list[dict[str, Any]]
+
+    # CRM enrichment workflow intermediates
+    resolved_batch: list[dict[str, Any]]
+    to_enrich: list[dict[str, Any]]
+    enriched_rows: list[dict[str, Any]]
+    flagged_low_confidence: list[dict[str, Any]]
+    deduped_rows: list[dict[str, Any]]
+    write_back_count: int
+    skipped_fresh: int

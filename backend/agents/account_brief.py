@@ -59,9 +59,18 @@ async def fetch_people_changes_node(state: CRMindState) -> dict:
 async def synthesize_brief_node(state: CRMindState) -> dict:
     base = await synthesize_node(state)
     response = base.get("final_response", {})
-    response.setdefault("signal_timeline", state.get("signals", []))
-    response.setdefault("key_people", state.get("people_changes", []))
-    response.setdefault("why_reach_out_now", "Explain why this matters for a sales team reaching out to this account.")
+
+    # Prefer LLM-provided values only when they are non-empty.
+    signal_timeline = response.get("signal_timeline") or response.get("signals") or state.get("signals", [])
+    key_people = response.get("key_people") or response.get("people") or state.get("people_changes", [])
+    why_reach_out_now = response.get("why_reach_out_now") or (
+        "Explain why this matters for a sales team reaching out to this account."
+    )
+
+    response["signal_timeline"] = signal_timeline
+    response["key_people"] = key_people
+    response["why_reach_out_now"] = why_reach_out_now
+
     return {
         "final_response": response,
         "steps_log": base.get("steps_log", []) + ["[synthesize_brief] built account brief fields"],
