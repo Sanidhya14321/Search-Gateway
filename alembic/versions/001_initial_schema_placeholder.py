@@ -1,14 +1,13 @@
-"""Initial schema placeholder revision.
+"""Initialize baseline schema from SQL bootstrap.
 
 Revision ID: 001
 Revises: None
-
-This repository currently starts tracked revisions at 002 while base schema
-is provisioned separately (SQL/bootstrap scripts). This no-op revision keeps
-Alembic's graph consistent for upgrade traversal.
 """
 
+from pathlib import Path
+
 from alembic import op
+from sqlalchemy import text
 
 revision = "001"
 down_revision = None
@@ -17,10 +16,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # No-op: baseline schema is created outside this revision chain.
-    pass
+    bind = op.get_bind()
+    companies_exists = bind.execute(text("SELECT to_regclass('public.companies')")).scalar()
+    if companies_exists:
+        return
+
+    schema_path = Path(__file__).resolve().parents[2] / "supabase" / "migrations" / "001_initial.sql"
+    schema_sql = schema_path.read_text(encoding="utf-8")
+    bind.execute(text(schema_sql))
 
 
 def downgrade() -> None:
-    # No-op counterpart.
+    # Baseline schema downgrade is intentionally a no-op.
     pass
