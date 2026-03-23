@@ -35,12 +35,19 @@ def upgrade() -> None:
             ELSIF embedding_typmod <= 0 THEN
                 RAISE NOTICE 'Skipping idx_chunks_embedding_hnsw: chunks.embedding has no fixed dimensions';
             ELSE
-                EXECUTE '
-                    CREATE INDEX IF NOT EXISTS idx_chunks_embedding_hnsw
-                    ON chunks
-                    USING hnsw (embedding vector_cosine_ops)
-                    WITH (m = 16, ef_construction = 64)
-                ';
+                BEGIN
+                    EXECUTE '
+                        CREATE INDEX IF NOT EXISTS idx_chunks_embedding_hnsw
+                        ON chunks
+                        USING hnsw (embedding vector_cosine_ops)
+                        WITH (m = 16, ef_construction = 64)
+                    ';
+                EXCEPTION
+                    WHEN SQLSTATE '22023' THEN
+                        RAISE NOTICE 'Skipping idx_chunks_embedding_hnsw: embedding column is not fixed-dimension vector';
+                    WHEN undefined_object OR feature_not_supported THEN
+                        RAISE NOTICE 'Skipping idx_chunks_embedding_hnsw: hnsw/vector operator class not available';
+                END;
             END IF;
         END
         $$
