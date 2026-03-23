@@ -5,6 +5,7 @@ Revises: 008
 """
 
 from alembic import op
+from sqlalchemy import text
 
 revision = "009"
 down_revision = "008"
@@ -22,20 +23,22 @@ USER_TABLES = [
 
 
 def upgrade() -> None:
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.routines
+    bind = op.get_bind()
+    auth_uid_exists = bind.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.routines
                 WHERE routine_schema = 'auth' AND routine_name = 'uid'
-            ) THEN
-                RAISE NOTICE 'Skipping user RLS policy migration: auth.uid() is unavailable';
-                RETURN;
-            END IF;
-        END $$
-        """
-    )
+            )
+            """
+        )
+    ).scalar()
+
+    if not auth_uid_exists:
+        # Non-Supabase Postgres environments do not expose auth.uid().
+        return
 
     for table in USER_TABLES:
         op.execute(

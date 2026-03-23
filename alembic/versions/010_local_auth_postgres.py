@@ -18,17 +18,49 @@ def upgrade() -> None:
 
     op.execute(
         """
-        UPDATE users
-        SET auth_provider = CASE
-            WHEN password_hash IS NOT NULL THEN 'local'
-            WHEN supabase_user_id IS NOT NULL THEN 'supabase'
-            ELSE 'local'
-        END
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'users'
+                  AND column_name = 'supabase_user_id'
+            ) THEN
+                UPDATE users
+                SET auth_provider = CASE
+                    WHEN password_hash IS NOT NULL THEN 'local'
+                    WHEN supabase_user_id IS NOT NULL THEN 'supabase'
+                    ELSE 'local'
+                END;
+            ELSE
+                UPDATE users
+                SET auth_provider = CASE
+                    WHEN password_hash IS NOT NULL THEN 'local'
+                    ELSE 'local'
+                END;
+            END IF;
+        END $$
         """
     )
 
     # Allow existing table to support non-Supabase local users.
-    op.execute("ALTER TABLE users ALTER COLUMN supabase_user_id DROP NOT NULL")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'users'
+                  AND column_name = 'supabase_user_id'
+            ) THEN
+                ALTER TABLE users ALTER COLUMN supabase_user_id DROP NOT NULL;
+            END IF;
+        END $$
+        """
+    )
 
 
 def downgrade() -> None:
