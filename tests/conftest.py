@@ -2,7 +2,6 @@ import asyncio
 import hashlib
 import os
 import sys
-import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -188,15 +187,13 @@ async def client(db_pool: asyncpg.Pool) -> AsyncIterator[AsyncClient]:
 
 @pytest_asyncio.fixture
 async def seeded_user(db_pool: asyncpg.Pool) -> dict:
-    supabase_id = uuid.uuid4()
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO users (supabase_user_id, email, display_name, plan)
-            VALUES ($1, 'test@example.com', 'Test User', 'free')
+            INSERT INTO users (email, display_name, plan, auth_provider, password_hash)
+            VALUES ('test@example.com', 'Test User', 'free', 'local', 'test-password-hash')
             RETURNING *
             """,
-            supabase_id,
         )
     return dict(row)
 
@@ -205,7 +202,6 @@ async def seeded_user(db_pool: asyncpg.Pool) -> dict:
 def mock_auth(seeded_user: dict):
     test_user = AuthenticatedUser(
         user_id=str(seeded_user["id"]),
-        supabase_user_id=str(seeded_user["supabase_user_id"]),
         email="test@example.com",
         plan="free",
         auth_method="jwt",
