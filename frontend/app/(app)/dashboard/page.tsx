@@ -16,26 +16,46 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     async function loadData() {
-      const supabase = createBrowserSupabaseClient();
-      
-      // Get current user
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      setUser(authUser);
+      try {
+        const supabase = createBrowserSupabaseClient();
+        
+        // Get current user
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) {
+          setError("Not authenticated");
+          setLoading(false);
+          return;
+        }
+        setUser(authUser);
 
-      // Try to fetch recent searches from API
-      if (authUser?.id) {
+        // Try to fetch recent searches from API
         try {
           const data = await apiGet("/api/v1/user/history?limit=5&offset=0");
           setRecentSearches(data.items || []);
-        } catch (e) {
-          console.error("Failed to fetch history:", e);
+        } catch (apiError: any) {
+          console.error("Failed to fetch history:", apiError);
+          const errMsg = apiError?.message || String(apiError);
+          if (errMsg.includes("localhost")) {
+            setError("❌ Backend URL not configured. Set NEXT_PUBLIC_API_BASE_URL=https://crmind-api.onrender.com in Vercel env vars.");
+          } else if (errMsg.includes("No active session")) {
+            setError("❌ Authentication failed. Check NEXT_PUBLIC_SUPABASE_* env vars in Vercel.");
+          } else if (errMsg.includes("CORS")) {
+            setError(`❌ CORS Error: Backend blocked request. Set CORS_ALLOWED_ORIGINS on Render to include your Vercel URL. Error: ${errMsg}`);
+          } else {
+            setError(`❌ API Error: ${errMsg}`);
+          }
         }
+        
+        setLoading(false);
+      } catch (e: any) {
+        console.error("Dashboard error:", e);
+        setError(`❌ Failed to load dashboard: ${e?.message || String(e)}`);
+        setLoading(false);
       }
-      
-      setLoading(false);
     }
 
     loadData();
@@ -47,6 +67,26 @@ export default function DashboardPage() {
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 rounded bg-stone-700"></div>
           <div className="h-32 rounded bg-stone-700"></div>
+        </div>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="space-y-6">
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4">
+          <p className="mb-4 text-sm text-red-200 whitespace-pre-wrap">{error}</p>
+          <button 
+            onClick={() => {
+              setError("");
+              setLoading(true);
+              window.location.reload();
+            }}
+            className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700"
+          >
+            Retry
+          </button>
         </div>
       </main>
     );

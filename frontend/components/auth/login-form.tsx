@@ -27,27 +27,40 @@ export function LoginForm() {
     setError("");
     setLoading(true);
 
-    const supabase = createBrowserSupabaseClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
-    setLoading(false);
-    if (authError) {
-      if (authError.status === 429) {
-        setError("Too many sign-in attempts. Please wait a minute and try again.");
+      if (authError) {
+        if (authError.status === 429) {
+          setError("Too many sign-in attempts. Please wait a minute and try again.");
+          setLoading(false);
+          return;
+        }
+        if (authError.message.toLowerCase().includes("email not confirmed")) {
+          setError("This account is still marked unconfirmed. If you recently disabled email confirmation, create a new account or mark this user as confirmed in Supabase Auth users.");
+          setLoading(false);
+          return;
+        }
+        setError(authError.message);
+        setLoading(false);
         return;
       }
-      if (authError.message.toLowerCase().includes("email not confirmed")) {
-        setError("This account is still marked unconfirmed. If you recently disabled email confirmation, create a new account or mark this user as confirmed in Supabase Auth users.");
-        return;
+
+      // Give session cookies a moment to settle, then redirect
+      setTimeout(() => {
+        router.push(redirect);
+      }, 300);
+    } catch (e: any) {
+      console.error("Sign in error:", e);
+      const errMsg = String(e?.message || e);
+      if (errMsg.includes("Cannot convert undefined")) {
+        setError("❌ Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel env vars.");
+      } else {
+        setError(errMsg);
       }
-      setError(authError.message);
-      return;
+      setLoading(false);
     }
-
-    // Give session cookies a moment to settle, then redirect
-    setTimeout(() => {
-      router.push(redirect);
-    }, 300);
   }
 
   return (

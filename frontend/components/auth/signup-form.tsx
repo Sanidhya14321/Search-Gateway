@@ -29,46 +29,57 @@ export function SignupForm() {
     setMessage("");
     setLoading(true);
 
-    const supabase = createBrowserSupabaseClient();
-    const callbackPath = `/auth/callback?next=${encodeURIComponent(redirect)}`;
-    const configuredSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "").trim();
-    const emailRedirectTo =
-      configuredSiteUrl
-        ? `${configuredSiteUrl.replace(/\/+$/, "")}${callbackPath}`
-        : typeof window !== "undefined"
-          ? `${window.location.origin}${callbackPath}`
-          : undefined;
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const callbackPath = `/auth/callback?next=${encodeURIComponent(redirect)}`;
+      const configuredSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "").trim();
+      const emailRedirectTo =
+        configuredSiteUrl
+          ? `${configuredSiteUrl.replace(/\/+$/, "")}${callbackPath}`
+          : typeof window !== "undefined"
+            ? `${window.location.origin}${callbackPath}`
+            : undefined;
 
-    const { data, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo,
-      },
-    });
+      const { data, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo,
+        },
+      });
 
-    setLoading(false);
-
-    if (authError) {
-      if (authError.status === 429) {
-        setError("Too many signup attempts. Please wait a minute and try again.");
+      if (authError) {
+        if (authError.status === 429) {
+          setError("Too many signup attempts. Please wait a minute and try again.");
+          setLoading(false);
+          return;
+        }
+        setError(authError.message);
+        setLoading(false);
         return;
       }
-      setError(authError.message);
-      return;
-    }
 
-    // If email confirmation is disabled, Supabase returns a session immediately.
-    if (data.session) {
-      // Give session cookies a moment to settle, then redirect
-      setTimeout(() => {
-        router.push(redirect);
-      }, 300);
-      return;
-    }
+      // If email confirmation is disabled, Supabase returns a session immediately.
+      if (data.session) {
+        // Give session cookies a moment to settle, then redirect
+        setTimeout(() => {
+          router.push(redirect);
+        }, 300);
+        return;
+      }
 
-    setMessage("Account created. Please check your inbox to confirm your email.");
-    router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+      setMessage("Account created. Please check your inbox to confirm your email.");
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+    } catch (e: any) {
+      console.error("Sign up error:", e);
+      const errMsg = String(e?.message || e);
+      if (errMsg.includes("Cannot convert undefined")) {
+        setError("❌ Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel env vars.");
+      } else {
+        setError(errMsg);
+      }
+      setLoading(false);
+    }
   }
 
   return (
