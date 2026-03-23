@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import os
 import sys
+import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -188,13 +189,40 @@ async def client(db_pool: asyncpg.Pool) -> AsyncIterator[AsyncClient]:
 @pytest_asyncio.fixture
 async def seeded_user(db_pool: asyncpg.Pool) -> dict:
     async with db_pool.acquire() as conn:
-        row = await conn.fetchrow(
+        cols = await conn.fetch(
             """
-            INSERT INTO users (email, display_name, plan, auth_provider, password_hash)
-            VALUES ('test@example.com', 'Test User', 'free', 'local', 'test-password-hash')
-            RETURNING *
-            """,
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='users'
+            """
         )
+        column_names = {str(row["column_name"]) for row in cols}
+
+        if {"auth_provider", "password_hash"}.issubset(column_names):
+            row = await conn.fetchrow(
+                """
+                INSERT INTO users (email, display_name, plan, auth_provider, password_hash)
+                VALUES ('test@example.com', 'Test User', 'free', 'local', 'test-password-hash')
+                RETURNING *
+                """
+            )
+        elif "supabase_user_id" in column_names:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO users (supabase_user_id, email, display_name, plan)
+                VALUES ($1, 'test@example.com', 'Test User', 'free')
+                RETURNING *
+                """,
+                uuid.uuid4(),
+            )
+        else:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO users (email, display_name, plan)
+                VALUES ('test@example.com', 'Test User', 'free')
+                RETURNING *
+                """
+            )
     return dict(row)
 
 

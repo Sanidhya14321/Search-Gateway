@@ -1,8 +1,8 @@
 import os
+import subprocess
+import sys
 from contextlib import asynccontextmanager
 
-from alembic import command
-from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,18 +16,29 @@ from backend.utils.exceptions import CRMindError
 
 
 def run_migrations() -> None:
-    cfg = Config("alembic.ini")
     direct_url = settings.database_url_direct or settings.database_url
     normalized_url = (
         direct_url.replace("postgres://", "postgresql://", 1)
         if direct_url.startswith("postgres://")
         else direct_url
     )
+
+    env = os.environ.copy()
     # Alembic env.py reads DATABASE_URL_DIRECT / DATABASE_URL. Keep both in sync for startup migration runs.
-    os.environ["DATABASE_URL_DIRECT"] = normalized_url
-    os.environ["DATABASE_URL"] = normalized_url
+    env["DATABASE_URL_DIRECT"] = normalized_url
+    env["DATABASE_URL"] = normalized_url
+
     logger.info("migrations_start | target=head")
-    command.upgrade(cfg, "head")
+    proc = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        logger.error("migrations_failed | code={} stderr={}", proc.returncode, proc.stderr.strip())
+        raise RuntimeError("Startup migrations failed")
     logger.info("migrations_done | target=head")
 
 
