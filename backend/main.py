@@ -47,6 +47,19 @@ for router in [search, enrich, entities, accounts, contacts, crawl, signals, age
     app.include_router(router.router, prefix="/api/v1")
 
 
+def _error_cors_headers(request) -> dict[str, str]:
+    origin = request.headers.get("origin")
+    if not origin:
+        return {}
+    if "*" in cors_origins or origin in cors_origins:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    return {}
+
+
 @app.exception_handler(CRMindError)
 async def handle_crmind_error(request, exc: CRMindError):
     return JSONResponse(
@@ -56,6 +69,7 @@ async def handle_crmind_error(request, exc: CRMindError):
             "message": str(exc),
             "path": str(request.url.path),
         },
+        headers=_error_cors_headers(request),
     )
 
 
@@ -69,4 +83,5 @@ async def handle_unexpected_error(request, exc: Exception):
             "message": "An unexpected error occurred",
             "path": str(request.url.path),
         },
+        headers=_error_cors_headers(request),
     )

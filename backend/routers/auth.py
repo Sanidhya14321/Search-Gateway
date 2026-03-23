@@ -68,6 +68,16 @@ async def signup(
             )
         except asyncpg.UniqueViolationError as exc:
             raise HTTPException(status_code=409, detail="An account with this email already exists") from exc
+        except (asyncpg.UndefinedColumnError, asyncpg.NotNullViolationError, asyncpg.UndefinedTableError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Auth schema is not ready. Run Alembic migrations on the deployed database "
+                    "(expected local auth columns on users table)."
+                ),
+            ) from exc
+        except asyncpg.PostgresError as exc:
+            raise HTTPException(status_code=503, detail=f"Database auth error: {type(exc).__name__}") from exc
 
     token, expires_in = _create_access_token(str(row["id"]))
     return {
@@ -93,14 +103,25 @@ async def login(
     email = body.email.strip().lower()
 
     async with pool.acquire() as db:
-        row = await db.fetchrow(
-            """
-            SELECT id, email, display_name, plan, created_at, is_active, password_hash
-            FROM users
-            WHERE email=$1
-            """,
-            email,
-        )
+        try:
+            row = await db.fetchrow(
+                """
+                SELECT id, email, display_name, plan, created_at, is_active, password_hash
+                FROM users
+                WHERE email=$1
+                """,
+                email,
+            )
+        except (asyncpg.UndefinedColumnError, asyncpg.UndefinedTableError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Auth schema is not ready. Run Alembic migrations on the deployed database "
+                    "(expected local auth columns on users table)."
+                ),
+            ) from exc
+        except asyncpg.PostgresError as exc:
+            raise HTTPException(status_code=503, detail=f"Database auth error: {type(exc).__name__}") from exc
 
     if row is None or not row["password_hash"] or not row["is_active"]:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -166,10 +187,21 @@ async def change_password(
     pool=Depends(get_pool),
 ):
     async with pool.acquire() as db:
-        row = await db.fetchrow(
-            "SELECT password_hash FROM users WHERE id=$1::uuid",
-            current_user.user_id,
-        )
+        try:
+            row = await db.fetchrow(
+                "SELECT password_hash FROM users WHERE id=$1::uuid",
+                current_user.user_id,
+            )
+        except (asyncpg.UndefinedColumnError, asyncpg.UndefinedTableError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Auth schema is not ready. Run Alembic migrations on the deployed database "
+                    "(expected local auth columns on users table)."
+                ),
+            ) from exc
+        except asyncpg.PostgresError as exc:
+            raise HTTPException(status_code=503, detail=f"Database auth error: {type(exc).__name__}") from exc
         if row is None or not row["password_hash"]:
             raise HTTPException(status_code=400, detail="Password login is not available for this account")
 
