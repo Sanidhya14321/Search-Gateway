@@ -29,13 +29,31 @@ def run_migrations() -> None:
     env["DATABASE_URL"] = normalized_url
 
     logger.info("migrations_start | target=head")
-    proc = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "head"],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+
+    def run_upgrade() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    proc = run_upgrade()
+    if proc.returncode != 0 and "relation \"chunks\" does not exist" in (proc.stderr or ""):
+        logger.warning("migrations_bootstrap_needed | reason=missing_chunks")
+        bootstrap = subprocess.run(
+            [sys.executable, "scripts/init_db.py"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if bootstrap.returncode != 0:
+            logger.error("bootstrap_failed | code={} stderr={}", bootstrap.returncode, bootstrap.stderr.strip())
+            raise RuntimeError("Startup schema bootstrap failed")
+        proc = run_upgrade()
+
     if proc.returncode != 0:
         logger.error("migrations_failed | code={} stderr={}", proc.returncode, proc.stderr.strip())
         raise RuntimeError("Startup migrations failed")

@@ -16,7 +16,7 @@ def upgrade() -> None:
     op.execute("DROP INDEX IF EXISTS idx_chunks_embedding_hnsw")
     op.execute(
         """
-        CREATE INDEX CONCURRENTLY idx_chunks_embedding_hnsw
+        CREATE INDEX IF NOT EXISTS idx_chunks_embedding_hnsw
         ON chunks
         USING hnsw (embedding vector_cosine_ops)
         WITH (m = 16, ef_construction = 64)

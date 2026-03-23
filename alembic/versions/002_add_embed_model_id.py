@@ -5,7 +5,6 @@ Revises: 001
 """
 
 from alembic import op
-import sqlalchemy as sa
 
 revision = "002"
 down_revision = "001"
@@ -14,31 +13,25 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column(
-        "chunks",
-        sa.Column(
-            "embed_model_id",
-            sa.String(length=64),
-            nullable=False,
-            server_default="nomic-embed-text",
-        ),
+    op.execute(
+        """
+        ALTER TABLE IF EXISTS chunks
+        ADD COLUMN IF NOT EXISTS embed_model_id VARCHAR(64) NOT NULL DEFAULT 'nomic-embed-text'
+        """
     )
-    op.add_column(
-        "chunks",
-        sa.Column(
-            "embed_model_version",
-            sa.String(length=32),
-            nullable=True,
-            server_default="1.0",
-        ),
+    op.execute(
+        """
+        ALTER TABLE IF EXISTS chunks
+        ADD COLUMN IF NOT EXISTS embed_model_version VARCHAR(32) DEFAULT '1.0'
+        """
     )
-    op.create_index("idx_chunks_model", "chunks", ["embed_model_id"])
+    op.execute("CREATE INDEX IF NOT EXISTS idx_chunks_model ON chunks (embed_model_id)")
 
     # Embedding dimensions are model-dependent and tracked via embed_model_id.
     # Keep chunks.embedding as VECTOR (no fixed dimension in schema).
 
 
 def downgrade():
-    op.drop_index("idx_chunks_model", table_name="chunks")
-    op.drop_column("chunks", "embed_model_version")
-    op.drop_column("chunks", "embed_model_id")
+    op.execute("DROP INDEX IF EXISTS idx_chunks_model")
+    op.execute("ALTER TABLE IF EXISTS chunks DROP COLUMN IF EXISTS embed_model_version")
+    op.execute("ALTER TABLE IF EXISTS chunks DROP COLUMN IF EXISTS embed_model_id")
