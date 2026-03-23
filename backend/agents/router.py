@@ -64,10 +64,15 @@ async def classify_intent(query: str) -> str:
     if "why" in text or "stale" in text or "failed" in text or "debug" in text:
         return "ops_debug"
 
-    classified = await llm_json_call_with_fallback(
-        f"Classify query into one of: {','.join(WORKFLOW_REGISTRY.keys())}. Return JSON with key workflow_name. Query: {query}"
-    )
-    return str(classified.get("workflow_name", "research"))
+    try:
+        classified = await llm_json_call_with_fallback(
+            f"Classify query into one of: {','.join(WORKFLOW_REGISTRY.keys())}. Return JSON with key workflow_name. Query: {query}"
+        )
+        workflow_name = str(classified.get("workflow_name", "research"))
+        return workflow_name if workflow_name in WORKFLOW_REGISTRY else "research"
+    except Exception as exc:
+        logger.warning("intent_classification_degraded | error={} fallback=research", str(exc))
+        return "research"
 
 
 async def run_agent(workflow_name: str, query: str, **kwargs) -> CRMindState:

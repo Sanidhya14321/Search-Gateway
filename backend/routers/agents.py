@@ -4,6 +4,7 @@ import time
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
 from backend.agents.router import run_agent as run_agent_workflow
@@ -109,7 +110,52 @@ async def run_agent(
             run_id,
             str(exc),
         )
-        raise HTTPException(status_code=500, detail="Agent run failed") from exc
+
+        degraded_result = {
+            "degraded": True,
+            "summary": "Agent providers are temporarily unavailable. Please retry shortly.",
+            "error": {
+                "code": "AGENT_DEGRADED",
+                "message": str(exc),
+            },
+            "facts": [],
+            "people": [],
+            "signals": [],
+            "citations": [],
+        }
+
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        await db.execute(
+            """
+            UPDATE agent_runs
+            SET status='completed', output_payload=$2::jsonb, steps_log=$3::jsonb,
+                duration_ms=$4, completed_at=NOW(), error_message=$5
+            WHERE run_id=$1
+            """,
+            run_id,
+            json.dumps(degraded_result, default=str),
+            json.dumps([f"[degraded] {type(exc).__name__}: {exc}"], default=str),
+            duration_ms,
+            str(exc),
+        )
+
+        logger.warning(
+            "agent_run_degraded | run_id={} workflow={} error_type={} error={}",
+            run_id,
+            request.workflow_name,
+            type(exc).__name__,
+            str(exc),
+        )
+
+        return AgentRunResponse(
+            run_id=run_id,
+            workflow_name=request.workflow_name,
+            status="completed",
+            result=degraded_result,
+            steps_log=[f"[degraded] {type(exc).__name__}: {exc}"],
+            citations=[],
+            duration_ms=duration_ms,
+        )
 
 
 @router.get("/run/{run_id}")

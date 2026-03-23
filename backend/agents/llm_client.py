@@ -69,9 +69,11 @@ async def llm_json_call_with_fallback(prompt: str, system: str = "", model: str 
         return await llm_json_call(prompt=prompt, system=system, model=model or settings.groq_llm_model, provider="groq")
     except Exception as primary_exc:
         logger.warning(
-            "llm_primary_failed | trace_id={} error={} fallback_provider=groq_fallback",
+            "llm_primary_failed | trace_id={} model={} error_type={} error={} fallback_provider=groq_fallback",
             get_trace_id(),
+            model or settings.groq_llm_model,
             type(primary_exc).__name__,
+            str(primary_exc),
         )
         try:
             return await llm_json_call(
@@ -82,8 +84,10 @@ async def llm_json_call_with_fallback(prompt: str, system: str = "", model: str 
             )
         except Exception as fallback_exc:
             logger.warning(
-                "llm_secondary_failed | trace_id={} error={} fallback_provider=none",
+                "llm_secondary_failed | trace_id={} model={} error_type={} error={} fallback_provider=none",
                 get_trace_id(),
+                settings.groq_llm_model_fallback,
                 type(fallback_exc).__name__,
+                str(fallback_exc),
             )
             raise fallback_exc
