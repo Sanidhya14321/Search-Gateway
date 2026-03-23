@@ -1,6 +1,7 @@
 import asyncio
 import os
 from logging.config import fileConfig
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from alembic import context
 from sqlalchemy import pool
@@ -21,6 +22,13 @@ if direct_url:
         direct_url = direct_url.replace("postgres://", "postgresql+asyncpg://", 1)
     elif direct_url.startswith("postgresql://") and "+asyncpg" not in direct_url:
         direct_url = direct_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    # SQLAlchemy asyncpg passes query args to asyncpg.connect(); it expects `ssl`, not `sslmode`.
+    parsed = urlparse(direct_url)
+    query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    normalized_pairs = [("ssl" if key == "sslmode" else key, value) for key, value in query_pairs]
+    direct_url = urlunparse(parsed._replace(query=urlencode(normalized_pairs)))
+
     config.set_main_option("sqlalchemy.url", direct_url)
 
 
