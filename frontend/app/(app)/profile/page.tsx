@@ -2,46 +2,43 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { useAuth } from "@/context/auth-context";
+import { apiPost } from "@/lib/api/client";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const { user, signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
-    async function loadUser() {
-      const supabase = createBrowserSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      setLoading(false);
+    if (!user) {
+      router.replace("/login");
+      return;
     }
-
-    loadUser();
-  }, []);
-
-  const handleUpdateEmail = async (newEmail: string) => {
-    setUpdating(true);
-    const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.updateUser({ email: newEmail });
-    setUpdating(false);
-
-    if (error) {
-      alert(`Error: ${error.message}`);
-    } else {
-      alert("Check your email to confirm the new address");
-    }
-  };
+    setLoading(false);
+  }, [user, router]);
 
   const handleChangePassword = async () => {
-    const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(user?.email);
-
-    if (error) {
-      alert(`Error: ${error.message}`);
-    } else {
-      alert("Check your email for password reset instructions");
+    if (!currentPassword || !newPassword) {
+      alert("Please fill both password fields.");
+      return;
+    }
+    setUpdating(true);
+    try {
+      await apiPost("/api/v1/auth/change-password", {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      alert("Password changed successfully");
+    } catch (error: any) {
+      alert(`Error: ${error?.message || String(error)}`);
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -72,11 +69,26 @@ export default function ProfilePage() {
       {/* Security */}
       <section className="rounded-lg border border-stone-700 bg-stone-900/50 p-6 space-y-4">
         <h2 className="font-semibold text-stone-100">Security</h2>
+        <input
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          placeholder="Current password"
+          className="w-full rounded-lg border border-stone-600 bg-stone-900 px-3 py-2 text-sm"
+        />
+        <input
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          placeholder="New password"
+          className="w-full rounded-lg border border-stone-600 bg-stone-900 px-3 py-2 text-sm"
+        />
         <button
           onClick={handleChangePassword}
+          disabled={updating}
           className="rounded-lg border border-stone-600 px-4 py-2 text-sm text-stone-300 hover:bg-stone-800"
         >
-          Change Password
+          {updating ? "Updating..." : "Change Password"}
         </button>
       </section>
 
@@ -85,8 +97,7 @@ export default function ProfilePage() {
         <h2 className="font-semibold text-red-300">Danger Zone</h2>
         <button
           onClick={async () => {
-            const supabase = createBrowserSupabaseClient();
-            await supabase.auth.signOut();
+            await signOut();
             router.push("/login");
           }}
           className="rounded-lg border border-red-600 px-4 py-2 text-sm text-red-300 hover:bg-red-900/20"

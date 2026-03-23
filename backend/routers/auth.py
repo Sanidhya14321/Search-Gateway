@@ -1,13 +1,126 @@
 """Authenticated user profile and personal API key endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import datetime, timedelta, timezone
 
+import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Query
+from jose import jwt
+from passlib.context import CryptContext
+
+from backend.config import settings
 from backend.database import get_pool
 from backend.middleware.auth import AuthenticatedUser, get_current_user
-from backend.models.requests import CreateApiKeyRequest, UpdatePreferencesRequest
+from backend.models.requests import (
+    AuthChangePasswordRequest,
+    AuthLoginRequest,
+    AuthSignupRequest,
+    CreateApiKeyRequest,
+    UpdatePreferencesRequest,
+)
 from backend.services.user_service import create_api_key, update_user_preferences
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
+
+
+def _create_access_token(user_id: str) -> tuple[str, int]:
+    expires_in_seconds = max(3600, settings.auth_jwt_expires_hours * 3600)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in_seconds)
+    token = jwt.encode(
+        {
+            "sub": user_id,
+            "exp": int(expires_at.timestamp()),
+            "iat": int(datetime.now(timezone.utc).timestamp()),
+            "typ": "access",
+        },
+        settings.auth_jwt_secret,
+        algorithm="HS256",
+    )
+    return token, expires_in_seconds
+
+
+def _ensure_auth_configured() -> None:
+    if not settings.auth_jwt_secret:
+        raise HTTPException(status_code=500, detail="AUTH_JWT_SECRET is not configured")
+
+
+@router.post("/signup")
+async def signup(
+    body: AuthSignupRequest,
+    pool=Depends(get_pool),
+):
+    _ensure_auth_configured()
+    email = body.email.strip().lower()
+    display_name = (body.display_name or "").strip() or email.split("@", 1)[0]
+    password_hash = pwd_context.hash(body.password)
+
+    async with pool.acquire() as db:
+        try:
+            row = await db.fetchrow(
+                """
+                INSERT INTO users (email, display_name, plan, is_active, auth_provider, password_hash)
+                VALUES ($1, $2, 'free', true, 'local', $3)
+                RETURNING id, email, display_name, plan, created_at
+                """,
+                email,
+                display_name,
+                password_hash,
+            )
+        except asyncpg.UniqueViolationError as exc:
+            raise HTTPException(status_code=409, detail="An account with this email already exists") from exc
+
+    token, expires_in = _create_access_token(str(row["id"]))
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": expires_in,
+        "user": {
+            "id": str(row["id"]),
+            "email": str(row["email"]),
+            "display_name": row["display_name"],
+            "plan": str(row["plan"]),
+            "created_at": row["created_at"],
+        },
+    }
+
+
+@router.post("/login")
+async def login(
+    body: AuthLoginRequest,
+    pool=Depends(get_pool),
+):
+    _ensure_auth_configured()
+    email = body.email.strip().lower()
+
+    async with pool.acquire() as db:
+        row = await db.fetchrow(
+            """
+            SELECT id, email, display_name, plan, created_at, is_active, password_hash
+            FROM users
+            WHERE email=$1
+            """,
+            email,
+        )
+
+    if row is None or not row["password_hash"] or not row["is_active"]:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not pwd_context.verify(body.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    token, expires_in = _create_access_token(str(row["id"]))
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": expires_in,
+        "user": {
+            "id": str(row["id"]),
+            "email": str(row["email"]),
+            "display_name": row["display_name"],
+            "plan": str(row["plan"]),
+            "created_at": row["created_at"],
+        },
+    }
 
 
 @router.get("/me")
@@ -44,6 +157,33 @@ async def update_me(
                 current_user.user_id,
             )
     return {"updated": True, "preferences": updated_prefs}
+
+
+@router.post("/change-password")
+async def change_password(
+    body: AuthChangePasswordRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    async with pool.acquire() as db:
+        row = await db.fetchrow(
+            "SELECT password_hash FROM users WHERE id=$1::uuid",
+            current_user.user_id,
+        )
+        if row is None or not row["password_hash"]:
+            raise HTTPException(status_code=400, detail="Password login is not available for this account")
+
+        if not pwd_context.verify(body.current_password, row["password_hash"]):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+        new_hash = pwd_context.hash(body.new_password)
+        await db.execute(
+            "UPDATE users SET password_hash=$1, auth_provider='local', updated_at=NOW() WHERE id=$2::uuid",
+            new_hash,
+            current_user.user_id,
+        )
+
+    return {"updated": True}
 
 
 @router.get("/api-keys")

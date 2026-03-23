@@ -23,7 +23,6 @@ pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto
 @dataclass
 class AuthenticatedUser:
     user_id: str
-    supabase_user_id: str
     email: str
     plan: str
     auth_method: str
@@ -49,7 +48,6 @@ async def get_current_user(
         if api_key == settings.internal_service_api_key:
             return AuthenticatedUser(
                 user_id="service",
-                supabase_user_id="service",
                 email="service@internal",
                 plan="admin",
                 auth_method="service",
@@ -74,13 +72,13 @@ async def get_optional_user(
 
 
 async def _verify_jwt(token: str, pool: asyncpg.Pool, trace: str) -> AuthenticatedUser:
-    if not settings.supabase_jwt_secret:
+    if not settings.auth_jwt_secret:
         raise HTTPException(status_code=401, detail="JWT auth is not configured")
 
     try:
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
+            settings.auth_jwt_secret,
             algorithms=["HS256"],
             options={"verify_aud": False},
         )
@@ -88,54 +86,25 @@ async def _verify_jwt(token: str, pool: asyncpg.Pool, trace: str) -> Authenticat
         logger.warning("jwt_decode_failed | trace_id={} error={}", trace, str(exc))
         raise HTTPException(status_code=401, detail="Invalid token") from exc
 
-    supabase_user_id = payload.get("sub")
-    if not supabase_user_id:
+    user_id = payload.get("sub")
+    if not user_id:
         raise HTTPException(status_code=401, detail="Token missing sub claim")
 
     async with pool.acquire() as db:
         user = await db.fetchrow(
-            "SELECT id, email, plan FROM users WHERE supabase_user_id=$1 AND is_active=true",
-            supabase_user_id,
+            "SELECT id, email, plan FROM users WHERE id=$1::uuid AND is_active=true",
+            user_id,
         )
 
     if user is None:
-        async with pool.acquire() as db:
-            user = await _provision_user(db, payload, supabase_user_id)
+        raise HTTPException(status_code=401, detail="User not found or inactive")
 
     logger.info("auth_jwt | trace_id={} user_id={} plan={}", trace, user["id"], user["plan"])
     return AuthenticatedUser(
         user_id=str(user["id"]),
-        supabase_user_id=str(supabase_user_id),
         email=str(user["email"]),
         plan=str(user["plan"]),
         auth_method="jwt",
-    )
-
-
-async def _provision_user(db: asyncpg.Connection, payload: dict, supabase_user_id: str) -> asyncpg.Record:
-    email = str(payload.get("email", "")).strip()
-    if not email:
-        email = f"{supabase_user_id}@supabase.local"
-
-    user_meta = payload.get("user_metadata") or {}
-    display_name = (
-        user_meta.get("full_name")
-        or user_meta.get("name")
-        or email.split("@", 1)[0]
-    )
-
-    return await db.fetchrow(
-        """
-        INSERT INTO users (supabase_user_id, email, display_name, plan)
-        VALUES ($1::uuid, $2, $3, 'free')
-        ON CONFLICT (supabase_user_id) DO UPDATE
-            SET email = EXCLUDED.email,
-                updated_at = NOW()
-        RETURNING id, email, plan
-        """,
-        supabase_user_id,
-        email,
-        display_name,
     )
 
 
@@ -155,8 +124,7 @@ async def _verify_api_key(raw_key: str, pool: asyncpg.Pool, trace: str) -> Authe
                 k.expires_at,
                 u.id AS user_id,
                 u.email,
-                u.plan,
-                u.supabase_user_id
+                u.plan
             FROM user_api_keys k
             JOIN users u ON u.id = k.user_id
             WHERE k.key_prefix = $1
@@ -183,7 +151,6 @@ async def _verify_api_key(raw_key: str, pool: asyncpg.Pool, trace: str) -> Authe
             logger.info("auth_api_key | trace_id={} user_id={} key_prefix={}", trace, row["user_id"], key_prefix)
             return AuthenticatedUser(
                 user_id=str(row["user_id"]),
-                supabase_user_id=str(row["supabase_user_id"]),
                 email=str(row["email"]),
                 plan=str(row["plan"]),
                 auth_method="api_key",

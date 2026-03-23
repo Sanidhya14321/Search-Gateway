@@ -32,3 +32,19 @@ class UpdatePreferencesRequest(BaseModel):
 class CreateApiKeyRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     expires_in_days: Optional[int] = Field(default=None, ge=1, le=365)
+
+
+class AuthSignupRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=512)
+    password: str = Field(..., min_length=8, max_length=128)
+    display_name: Optional[str] = Field(default=None, max_length=255)
+
+
+class AuthLoginRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=512)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class AuthChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)

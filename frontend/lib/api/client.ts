@@ -1,30 +1,57 @@
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/+$/, "");
+const ACCESS_TOKEN_KEY = "crmind_access_token";
 
-function buildApiUrl(path: string) {
+export function buildApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const hasVersionPrefix = API_BASE_URL.endsWith("/api/v1");
-  const pathHasApiPrefix = normalizedPath.startsWith("/api/");
+  const baseHasVersionPrefix = API_BASE_URL.endsWith("/api/v1");
 
-  if (hasVersionPrefix || pathHasApiPrefix) {
+  if (baseHasVersionPrefix) {
+    if (normalizedPath === "/api/v1") {
+      return API_BASE_URL;
+    }
+    if (normalizedPath.startsWith("/api/v1/")) {
+      return `${API_BASE_URL}${normalizedPath.slice("/api/v1".length)}`;
+    }
     return `${API_BASE_URL}${normalizedPath}`;
   }
+
+  if (normalizedPath.startsWith("/api/")) {
+    return `${API_BASE_URL}${normalizedPath}`;
+  }
+
   return `${API_BASE_URL}/api/v1${normalizedPath}`;
 }
 
-async function authHeaders() {
-  const supabase = createBrowserSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+function getAccessToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+}
 
-  if (!session?.access_token) {
+export function setAccessToken(token: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (!token) {
+    window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+    return;
+  }
+  window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
+}
+
+export function clearAccessToken() {
+  setAccessToken(null);
+}
+
+async function authHeaders() {
+  const accessToken = getAccessToken();
+  if (!accessToken) {
     throw new Error("No active session. Please log in.");
   }
 
   return {
-    Authorization: `Bearer ${session.access_token}`,
+    Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
   };
 }
@@ -48,6 +75,16 @@ async function parseResponse(response: Response) {
   }
 
   const text = await response.text();
+  let detail: string | null = null;
+  try {
+    const parsed = JSON.parse(text);
+    detail = parsed?.detail || parsed?.message || parsed?.error || null;
+  } catch {
+    // Fall through to plain text error handling.
+  }
+  if (detail) {
+    throw new Error(String(detail));
+  }
   throw new Error(text || `HTTP ${response.status}`);
 }
 

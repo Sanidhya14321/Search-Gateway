@@ -24,10 +24,9 @@ class Settings(BaseSettings):
     )
     embedding_dimensions: int = Field(default=384, alias="EMBEDDING_DIMENSIONS")
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
-    supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
-    supabase_url: str = Field(default="", alias="SUPABASE_URL")
-    supabase_anon_key: str = Field(default="", alias="SUPABASE_ANON_KEY")
-    supabase_jwt_secret: str = Field(default="", alias="SUPABASE_JWT_SECRET")
+
+    auth_jwt_secret: str = Field(default="", alias="AUTH_JWT_SECRET")
+    auth_jwt_expires_hours: int = Field(default=24, alias="AUTH_JWT_EXPIRES_HOURS")
 
     internal_service_api_key: str = Field(
         default="internal-secret-change-in-production",

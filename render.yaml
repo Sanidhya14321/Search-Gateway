@@ -15,14 +15,10 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
-      - key: SUPABASE_URL
+      - key: AUTH_JWT_SECRET
         sync: false
-      - key: SUPABASE_ANON_KEY
-        sync: false
-      - key: SUPABASE_JWT_SECRET
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
+      - key: AUTH_JWT_EXPIRES_HOURS
+        value: "24"
       - key: INTERNAL_SERVICE_API_KEY
         sync: false
       - key: API_KEY

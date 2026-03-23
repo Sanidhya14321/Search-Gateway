@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { useAuth } from "@/context/auth-context";
 import { apiGet } from "@/lib/api/client";
 
 interface RecentSearch {
@@ -13,7 +13,7 @@ interface RecentSearch {
 }
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -21,16 +21,11 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const supabase = createBrowserSupabaseClient();
-        
-        // Get current user
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (!authUser) {
+        if (!user?.id) {
           setError("Not authenticated");
           setLoading(false);
           return;
         }
-        setUser(authUser);
 
         // Try to fetch recent searches from API
         try {
@@ -42,7 +37,7 @@ export default function DashboardPage() {
           if (errMsg.includes("localhost")) {
             setError("❌ Backend URL not configured. Set NEXT_PUBLIC_API_BASE_URL=https://crmind-api.onrender.com in Vercel env vars.");
           } else if (errMsg.includes("No active session")) {
-            setError("❌ Authentication failed. Check NEXT_PUBLIC_SUPABASE_* env vars in Vercel.");
+            setError("❌ Authentication failed. Please log in again.");
           } else if (errMsg.includes("CORS")) {
             setError(`❌ CORS Error: Backend blocked request. Set CORS_ALLOWED_ORIGINS on Render to include your Vercel URL. Error: ${errMsg}`);
           } else {
@@ -59,7 +54,7 @@ export default function DashboardPage() {
     }
 
     loadData();
-  }, []);
+  }, [user?.id]);
 
   if (loading) {
     return (

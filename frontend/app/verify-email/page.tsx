@@ -14,7 +14,7 @@ export default function VerifyEmailPage({
         {email ? `We sent a confirmation link to ${email}.` : "We sent a confirmation link to your email address."}
       </p>
       <p className="mt-3 text-sm text-stone-400">
-        If you disabled email confirmation in Supabase and still cannot sign in, your user may have been created before that setting changed.
+        Email verification is optional in local auth mode. If you already created your account, go back and sign in.
       </p>
       <Link href="/login" className="mt-6 inline-block rounded-lg bg-amber-500 px-4 py-2 font-medium text-stone-900">
         Back to login

@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { hasSupabasePublicEnv } from "@/lib/supabase/env";
+import { buildApiUrl } from "@/lib/api/client";
 
 export default function DiagnosticsPage() {
   const [diags, setDiags] = useState<Record<string, any>>({});
@@ -15,29 +14,13 @@ export default function DiagnosticsPage() {
       // Check environment variables
       results.env = {
         NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || "❌ NOT SET",
-        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? "✅ SET" : "❌ NOT SET",
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "✅ SET" : "❌ NOT SET",
-        NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || "❌ NOT SET",
+        NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || "ℹ️ OPTIONAL",
       };
 
-      results.hasSupabaseEnv = hasSupabasePublicEnv();
-
-      // Check Supabase connection
-      if (hasSupabasePublicEnv()) {
-        try {
-          const supabase = createBrowserSupabaseClient();
-          const { data, error } = await supabase.auth.getSession();
-          results.supabase = {
-            connected: !error,
-            hasSession: !!data.session,
-            error: error?.message || null,
-          };
-        } catch (e) {
-          results.supabase = { connected: false, error: String(e) };
-        }
-      } else {
-        results.supabase = { error: "Supabase env vars not set" };
-      }
+      const token = typeof window !== "undefined" ? window.localStorage.getItem("crmind_access_token") : null;
+      results.auth = {
+        tokenPresent: Boolean(token),
+      };
 
       // Check backend connectivity
       if (process.env.NEXT_PUBLIC_API_BASE_URL) {
@@ -61,6 +44,32 @@ export default function DiagnosticsPage() {
         }
       } else {
         results.backend = { error: "NEXT_PUBLIC_API_BASE_URL not set" };
+      }
+
+      if (token) {
+        try {
+          const response = await fetch(buildApiUrl("/api/v1/auth/me"), {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
+          });
+
+          if (!response.ok) {
+            results.auth.currentUser = null;
+            results.auth.authCheckError = `HTTP ${response.status}`;
+          } else {
+            const me = await response.json();
+            results.auth.currentUser = {
+              id: me.id,
+              email: me.email,
+            };
+          }
+        } catch (e) {
+          results.auth.currentUser = null;
+          results.auth.authCheckError = String(e);
+        }
       }
 
       setDiags(results);
@@ -92,24 +101,15 @@ export default function DiagnosticsPage() {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-stone-200">Supabase Auth</h2>
+          <h2 className="text-xl font-semibold text-stone-200">Auth Status</h2>
           <div className="rounded-lg bg-stone-900 p-4 space-y-2 text-sm">
-            {diags.hasSupabaseEnv ? (
-              <div>
-                <div>
-                  Configured: <span className="text-green-400">✅</span>
-                </div>
-                <div>
-                  Connected: <span className={diags.supabase?.connected ? "text-green-400" : "text-red-400"}>{diags.supabase?.connected ? "✅" : "❌"}</span>
-                </div>
-                <div>
-                  Has Session: <span className={diags.supabase?.hasSession ? "text-green-400" : "text-orange-400"}>{diags.supabase?.hasSession ? "✅" : "❌ (not logged in)"}</span>
-                </div>
-                {diags.supabase?.error && <div className="text-red-400 mt-2">Error: {diags.supabase.error}</div>}
-              </div>
-            ) : (
-              <div className="text-red-400">❌ Supabase environment variables not configured</div>
-            )}
+            <div>
+              Access Token: <span className={diags.auth?.tokenPresent ? "text-green-400" : "text-red-400"}>{diags.auth?.tokenPresent ? "✅ present" : "❌ missing"}</span>
+            </div>
+            <div>
+              Current User: <span className={diags.auth?.currentUser ? "text-green-400" : "text-orange-400"}>{diags.auth?.currentUser ? diags.auth.currentUser.email : "Not resolved"}</span>
+            </div>
+            {diags.auth?.authCheckError && <div className="text-red-400 mt-2">Error: {diags.auth.authCheckError}</div>}
           </div>
         </section>
 
@@ -130,10 +130,10 @@ export default function DiagnosticsPage() {
         <section className="rounded-lg bg-blue-900/30 border border-blue-500/40 p-4">
           <h3 className="font-semibold text-blue-200 mb-2">💡 What to check:</h3>
           <ul className="text-sm text-blue-100 space-y-1">
-            {!diags.env?.NEXT_PUBLIC_SUPABASE_URL?.startsWith("✅") && <li>• Set NEXT_PUBLIC_SUPABASE_URL in Vercel environment variables</li>}
-            {!diags.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY?.startsWith("✅") && <li>• Set NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel environment variables</li>}
             {!diags.backend?.reachable && <li>• Check NEXT_PUBLIC_API_BASE_URL is correct and backend is running</li>}
             {!diags.backend?.reachable && <li>• Check backend CORS_ALLOWED_ORIGINS includes your frontend domain</li>}
+            {!diags.auth?.tokenPresent && <li>• Sign in again to generate a local JWT token</li>}
+            {diags.auth?.authCheckError && <li>• Ensure AUTH_JWT_SECRET is set and consistent for login + auth verification</li>}
           </ul>
         </section>
       </div>
