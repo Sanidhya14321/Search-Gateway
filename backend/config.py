@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="text", alias="LOG_FORMAT")
     cors_allowed_origins: str = Field(default="http://localhost:3000", alias="CORS_ALLOWED_ORIGINS")
+    cors_allow_origin_regex: str = Field(
+        default=r"https://.*\\.vercel\\.app|http://localhost(:\\d+)?",
+        alias="CORS_ALLOW_ORIGIN_REGEX",
+    )
 
     @property
     def cors_allowed_origins_list(self) -> list[str]:

@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 from contextlib import asynccontextmanager
@@ -84,9 +85,12 @@ configure_logging()
 app = FastAPI(title="CRMind API", version="1.0.0", lifespan=lifespan)
 app.middleware("http")(trace_timing_middleware)
 cors_origins = settings.cors_allowed_origins_list or ["http://localhost:3000"]
+cors_origin_regex = settings.cors_allow_origin_regex or ""
+compiled_cors_origin_regex = re.compile(cors_origin_regex) if cors_origin_regex else None
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex or None,
     allow_credentials="*" not in cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,6 +105,12 @@ def _error_cors_headers(request) -> dict[str, str]:
     if not origin:
         return {}
     if "*" in cors_origins or origin in cors_origins:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    if compiled_cors_origin_regex and compiled_cors_origin_regex.fullmatch(origin):
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
