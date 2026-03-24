@@ -72,10 +72,12 @@ async def synthesize_report_node(state: CRMindState) -> dict:
         if chunk_text:
             context_lines.append(f"[{idx}] {chunk_text} | source={source_url}")
 
+    evidence_text = "\n".join(context_lines)
+
     prompt = (
         f"Query: {state.get('query', '')}\n"
         f"Sub-questions: {state.get('_sub_questions', [])}\n"
-        f"Evidence:\n{'\\n'.join(context_lines)}\n"
+        f"Evidence:\n{evidence_text}\n"
         "Create JSON with keys title and sections where each section has heading, content, citations."
         "Use ONLY the provided evidence. If evidence is insufficient, keep sections empty and set degraded=true."
     )

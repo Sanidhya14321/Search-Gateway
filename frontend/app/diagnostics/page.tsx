@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { buildApiUrl } from "@/lib/api/client";
+import { PageGuide } from "@/components/common/page-guide";
+import { PublicFooter } from "@/components/layout/public-footer";
+import { PublicNav } from "@/components/layout/public-nav";
 
 export default function DiagnosticsPage() {
   const [diags, setDiags] = useState<Record<string, any>>({});
@@ -79,19 +82,37 @@ export default function DiagnosticsPage() {
     runDiagnostics();
   }, []);
 
-  if (loading) return <div className="p-4">Running diagnostics...</div>;
+  if (loading) {
+    return (
+      <div className="page-wrap">
+        <PublicNav />
+        <main className="page-container">
+          <div className="glass rounded-2xl p-6 text-sm text-stone-700">Running diagnostics...</div>
+        </main>
+      </div>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-stone-950 p-8">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <h1 className="text-3xl font-bold text-stone-100">🔍 Diagnostics</h1>
+    <div className="page-wrap">
+      <PublicNav />
+      <main className="page-container max-w-4xl space-y-6">
+        <PageGuide
+          title="Diagnostics"
+          description="Use this page to quickly verify auth state, backend connectivity, and environment configuration before deeper debugging."
+          howToUse={[
+            "Confirm backend reachability first.",
+            "Validate token presence and /auth/me resolution.",
+            "Copy diagnostics output when opening support tickets.",
+          ]}
+        />
 
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-stone-200">Environment Variables</h2>
-          <div className="rounded-lg bg-stone-900 p-4 space-y-2 text-sm font-mono">
+          <h2 className="font-display text-2xl text-stone-900">Environment Variables</h2>
+          <div className="glass rounded-2xl p-4 space-y-2 text-sm font-mono">
             {Object.entries(diags.env || {}).map(([key, value]) => (
               <div key={key} className="flex justify-between">
-                <span className="text-stone-400">{key}:</span>
+                <span className="text-stone-500">{key}:</span>
                 <span className={typeof value === "string" && value.startsWith("❌") ? "text-red-400" : "text-green-400"}>
                   {String(value)}
                 </span>
@@ -101,42 +122,43 @@ export default function DiagnosticsPage() {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-stone-200">Auth Status</h2>
-          <div className="rounded-lg bg-stone-900 p-4 space-y-2 text-sm">
+          <h2 className="font-display text-2xl text-stone-900">Auth Status</h2>
+          <div className="glass rounded-2xl p-4 space-y-2 text-sm">
             <div>
-              Access Token: <span className={diags.auth?.tokenPresent ? "text-green-400" : "text-red-400"}>{diags.auth?.tokenPresent ? "✅ present" : "❌ missing"}</span>
+              Access Token: <span className={diags.auth?.tokenPresent ? "text-green-700" : "text-red-500"}>{diags.auth?.tokenPresent ? "present" : "missing"}</span>
             </div>
             <div>
-              Current User: <span className={diags.auth?.currentUser ? "text-green-400" : "text-orange-400"}>{diags.auth?.currentUser ? diags.auth.currentUser.email : "Not resolved"}</span>
+              Current User: <span className={diags.auth?.currentUser ? "text-green-700" : "text-amber-700"}>{diags.auth?.currentUser ? diags.auth.currentUser.email : "Not resolved"}</span>
             </div>
             {diags.auth?.authCheckError && <div className="text-red-400 mt-2">Error: {diags.auth.authCheckError}</div>}
           </div>
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-stone-200">Backend Connectivity</h2>
-          <div className="rounded-lg bg-stone-900 p-4 space-y-2 text-sm">
+          <h2 className="font-display text-2xl text-stone-900">Backend Connectivity</h2>
+          <div className="glass rounded-2xl p-4 space-y-2 text-sm">
             <div>
-              URL: <span className="text-stone-300 font-mono">{diags.backend?.url || "NOT SET"}</span>
+              URL: <span className="text-stone-700 font-mono">{diags.backend?.url || "NOT SET"}</span>
             </div>
             <div>
-              Reachable: <span className={diags.backend?.reachable ? "text-green-400" : "text-red-400"}>{diags.backend?.reachable ? "✅" : "❌"}</span>
+              Reachable: <span className={diags.backend?.reachable ? "text-green-700" : "text-red-500"}>{diags.backend?.reachable ? "yes" : "no"}</span>
             </div>
             {diags.backend?.status && <div>Status Code: {diags.backend.status}</div>}
-            {diags.backend?.error && <div className="text-red-400 mt-2">Error: {diags.backend.error}</div>}
+            {diags.backend?.error && <div className="text-red-500 mt-2">Error: {diags.backend.error}</div>}
           </div>
         </section>
 
-        <section className="rounded-lg bg-blue-900/30 border border-blue-500/40 p-4">
-          <h3 className="font-semibold text-blue-200 mb-2">💡 What to check:</h3>
-          <ul className="text-sm text-blue-100 space-y-1">
+        <section className="glass rounded-2xl border border-sky-200 p-4">
+          <h3 className="font-semibold text-sky-800 mb-2">What to check next</h3>
+          <ul className="text-sm text-sky-900 space-y-1">
             {!diags.backend?.reachable && <li>• Check NEXT_PUBLIC_API_BASE_URL is correct and backend is running</li>}
             {!diags.backend?.reachable && <li>• Check backend CORS_ALLOWED_ORIGINS includes your frontend domain</li>}
             {!diags.auth?.tokenPresent && <li>• Sign in again to generate a local JWT token</li>}
             {diags.auth?.authCheckError && <li>• Ensure AUTH_JWT_SECRET is set and consistent for login + auth verification</li>}
           </ul>
         </section>
-      </div>
-    </main>
+      </main>
+      <PublicFooter />
+    </div>
   );
 }
