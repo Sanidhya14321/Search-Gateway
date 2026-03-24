@@ -84,9 +84,12 @@ configure_logging()
 
 app = FastAPI(title="CRMind API", version="1.0.0", lifespan=lifespan)
 app.middleware("http")(trace_timing_middleware)
-cors_origins = settings.cors_allowed_origins_list or ["http://localhost:3000"]
+cors_origins = [origin.rstrip("/") for origin in settings.cors_allowed_origins_list] or ["http://localhost:3000"]
 cors_origin_regex = settings.cors_allow_origin_regex or ""
-compiled_cors_origin_regex = re.compile(cors_origin_regex) if cors_origin_regex else None
+try:
+    compiled_cors_origin_regex = re.compile(cors_origin_regex) if cors_origin_regex else None
+except re.error:
+    compiled_cors_origin_regex = None
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -100,19 +103,45 @@ for router in [search, enrich, entities, accounts, contacts, crawl, signals, age
     app.include_router(router.router, prefix="/api/v1")
 
 
+def _origin_is_allowed(origin: str) -> bool:
+    normalized_origin = origin.rstrip("/")
+    if "*" in cors_origins or normalized_origin in cors_origins:
+        return True
+    if compiled_cors_origin_regex and compiled_cors_origin_regex.fullmatch(normalized_origin):
+        return True
+    return False
+
+
+@app.middleware("http")
+async def ensure_cors_headers_middleware(request, call_next):
+    response = await call_next(request)
+    origin = request.headers.get("origin")
+    if not origin or not _origin_is_allowed(origin):
+        return response
+
+    response.headers.setdefault("Access-Control-Allow-Origin", origin.rstrip("/"))
+    response.headers.setdefault("Vary", "Origin")
+    if "*" not in cors_origins:
+        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+
+    if request.method.upper() == "OPTIONS":
+        response.headers.setdefault("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+        requested_headers = request.headers.get("access-control-request-headers")
+        response.headers.setdefault(
+            "Access-Control-Allow-Headers",
+            requested_headers or "Authorization,Content-Type,X-Trace-ID",
+        )
+
+    return response
+
+
 def _error_cors_headers(request) -> dict[str, str]:
     origin = request.headers.get("origin")
     if not origin:
         return {}
-    if "*" in cors_origins or origin in cors_origins:
+    if _origin_is_allowed(origin):
         return {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Credentials": "true",
-            "Vary": "Origin",
-        }
-    if compiled_cors_origin_regex and compiled_cors_origin_regex.fullmatch(origin):
-        return {
-            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Origin": origin.rstrip("/"),
             "Access-Control-Allow-Credentials": "true",
             "Vary": "Origin",
         }

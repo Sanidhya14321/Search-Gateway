@@ -38,6 +38,6 @@ services:
       - key: CACHE_TTL_SECONDS
         value: 3600
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
+        value: http://localhost:3000,https://search-gateway-tau.vercel.app,https://search-gateway.vercel.app
       - key: CORS_ALLOW_ORIGIN_REGEX
-        value: https://.*\.vercel\.app|http://localhost(:\d+)?
+        value: ^https://[a-z0-9-]+\.vercel\.app$|^http://localhost(:\d+)?$

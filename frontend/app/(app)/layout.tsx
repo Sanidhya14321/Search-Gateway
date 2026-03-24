@@ -16,7 +16,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   }, [loading, user, router]);
 
   if (loading || !user) {
-    return <main className="p-8 text-stone-200">Loading session...</main>;
+    return <main className="p-8 text-stone-700">Loading session...</main>;
   }
 
   return <AppShell>{children}</AppShell>;

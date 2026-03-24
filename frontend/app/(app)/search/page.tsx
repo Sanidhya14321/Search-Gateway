@@ -17,9 +17,9 @@ export default function SearchPage() {
 
   return (
     <main className="space-y-6">
-      <h1 className="font-display text-3xl text-stone-100">Search Results</h1>
-      {isLoading ? <p className="text-stone-300">Loading...</p> : null}
-      {error ? <p className="text-red-400">{(error as Error).message}</p> : null}
+      <h1 className="font-display text-3xl text-stone-900">Search Results</h1>
+      {isLoading ? <p className="text-stone-600">Loading...</p> : null}
+      {error ? <p className="text-red-600">{(error as Error).message}</p> : null}
       <section className="grid gap-4 md:grid-cols-2">
         {(data?.candidates || []).map((candidate: any) => (
           <EntityCard key={candidate.canonical_id} entity={candidate} />

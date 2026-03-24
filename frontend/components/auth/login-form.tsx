@@ -36,12 +36,12 @@ export function LoginForm() {
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="Email" className="w-full rounded-xl border border-stone-600 bg-stone-900 px-3 py-2" />
-      <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required placeholder="Password" className="w-full rounded-xl border border-stone-600 bg-stone-900 px-3 py-2" />
-      <button disabled={loading} className="w-full rounded-xl bg-amber-500 px-3 py-2 font-semibold text-stone-950">
+      <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="Email" className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-stone-800" />
+      <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required placeholder="Password" className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-stone-800" />
+      <button disabled={loading} className="w-full rounded-xl bg-stone-900 px-3 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
         {loading ? "Signing in..." : "Sign In"}
       </button>
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </form>
   );
 }

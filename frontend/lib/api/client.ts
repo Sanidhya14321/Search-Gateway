@@ -1,8 +1,18 @@
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/+$/, "");
+const USE_BROWSER_PROXY = process.env.NEXT_PUBLIC_USE_API_PROXY !== "false";
 const ACCESS_TOKEN_KEY = "crmind_access_token";
 
 export function buildApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  // Browser requests default to same-origin proxy to eliminate CORS issues.
+  if (typeof window !== "undefined" && USE_BROWSER_PROXY) {
+    if (normalizedPath.startsWith("/api/")) {
+      return `/api/proxy${normalizedPath}`;
+    }
+    return `/api/proxy/api/v1${normalizedPath}`;
+  }
+
   const baseHasVersionPrefix = API_BASE_URL.endsWith("/api/v1");
 
   if (baseHasVersionPrefix) {

@@ -22,16 +22,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="page-wrap text-stone-900">
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-6 md:grid-cols-[260px,1fr]">
-        <aside className="glass sticky top-4 h-fit rounded-2xl p-4">
-          <h2 className="mb-1 font-display text-xl">CRMind</h2>
-          <p className="mb-4 text-xs text-stone-500">Entity-first CRM intelligence workspace</p>
-          <nav className="space-y-1">
+      <header className="sticky top-0 z-40 border-b border-stone-300/60 bg-[color:var(--color-surface)]/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
+          <Link href="/dashboard" className="font-display text-xl font-semibold text-teal-900">
+            CRMind
+          </Link>
+          <nav className="flex flex-1 flex-wrap items-center gap-2 text-sm">
             {LINKS.map(([href, label]) => (
               <Link
                 key={href}
                 href={href}
-                className={`block rounded-lg px-3 py-2 text-sm transition ${pathname.startsWith(href) ? "bg-stone-900 text-stone-100" : "text-stone-600 hover:bg-white/70 hover:text-stone-900"}`}
+                className={`rounded-full px-3 py-1.5 transition ${pathname.startsWith(href) ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-teal-50 hover:text-teal-900"}`}
               >
                 {label}
               </Link>
@@ -39,11 +40,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
           <button
             onClick={() => signOut()}
-            className="mt-6 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 hover:border-stone-900 hover:text-stone-900"
+            className="rounded-full border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700 hover:border-stone-900 hover:text-stone-900"
           >
             Sign out
           </button>
-        </aside>
+        </div>
+      </header>
+      <div className="mx-auto w-full max-w-7xl px-4 py-6">
         <section className="space-y-6">{children}</section>
       </div>
     </div>

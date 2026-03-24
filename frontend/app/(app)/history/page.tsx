@@ -24,14 +24,14 @@ export default function HistoryPage() {
   }, []);
 
   if (loading) {
-    return <main className="space-y-4"><div className="h-96 animate-pulse rounded bg-stone-700"></div></main>;
+    return <main className="space-y-4"><div className="h-96 animate-pulse rounded bg-stone-200"></div></main>;
   }
 
   return (
     <main className="space-y-6">
       <header>
-        <h1 className="font-display text-4xl font-bold text-stone-100">Search History</h1>
-        <p className="mt-2 text-stone-400">Your recent search queries</p>
+        <h1 className="font-display text-4xl font-bold text-stone-900">Search History</h1>
+        <p className="mt-2 text-stone-600">Your recent search queries</p>
       </header>
 
       {searchHistory.length > 0 ? (
@@ -40,16 +40,16 @@ export default function HistoryPage() {
             <Link
               key={`${item.created_at || idx}-${item.query || "q"}`}
               href={`/search?q=${encodeURIComponent(item.query)}`}
-              className="block rounded-lg border border-stone-700 bg-stone-900/50 p-4 transition hover:bg-stone-800"
+              className="block rounded-lg border border-stone-200 bg-white/70 p-4 transition hover:border-stone-900"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-stone-100">{item.query}</p>
-                  <p className="text-xs text-stone-400">
+                  <p className="font-medium text-stone-900">{item.query}</p>
+                  <p className="text-xs text-stone-500">
                     {new Date(item.created_at).toLocaleString()}
                   </p>
                 </div>
-                <span className="text-xs rounded-full bg-stone-700 px-3 py-1">
+                <span className="text-xs rounded-full bg-stone-100 px-3 py-1 text-stone-700">
                   {item.entity_type || "search"}
                 </span>
               </div>
@@ -57,9 +57,9 @@ export default function HistoryPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-stone-700 bg-stone-900/50 p-8 text-center">
-          <p className="text-stone-400">No search history yet</p>
-          <Link href="/search" className="mt-4 inline-block rounded-lg bg-amber-500 px-6 py-2 font-semibold text-stone-950">
+        <div className="rounded-lg border border-stone-200 bg-white/70 p-8 text-center">
+          <p className="text-stone-600">No search history yet</p>
+          <Link href="/search" className="mt-4 inline-block rounded-lg bg-stone-900 px-6 py-2 font-semibold text-white">
             Start Searching
           </Link>
         </div>
