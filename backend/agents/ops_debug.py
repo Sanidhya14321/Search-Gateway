@@ -73,7 +73,14 @@ async def identify_failure_cause_node(state: CRMindState) -> dict:
         f"Queue: {state.get('crawl_queue', [])}\n"
         f"Agent logs: {state.get('pipeline_logs', [])}"
     )
-    result = await llm_json_call_with_fallback(prompt)
+    try:
+        result = await llm_json_call_with_fallback(prompt)
+    except Exception:
+        result = {
+            "failure_type": "unknown",
+            "reason": "LLM unavailable during diagnostics classification",
+            "degraded": True,
+        }
     return {"failure_cause": result, "steps_log": state.get("steps_log", []) + ["[identify_failure_cause] done"]}
 
 
@@ -82,7 +89,18 @@ async def generate_remediation_node(state: CRMindState) -> dict:
         "Suggest remediation as JSON with keys remediation and auto_fixable (bool).\n"
         f"Failure: {state.get('failure_cause', {})}"
     )
-    remediation = await llm_json_call_with_fallback(prompt)
+    try:
+        remediation = await llm_json_call_with_fallback(prompt)
+    except Exception:
+        remediation = {
+            "remediation": [
+                "Retry the request after 30-60 seconds.",
+                "Check backend health endpoint and trace logs.",
+                "Verify CORS and API key/JWT authentication headers.",
+            ],
+            "auto_fixable": False,
+            "degraded": True,
+        }
     return {
         "final_response": remediation,
         "steps_log": state.get("steps_log", []) + ["[generate_remediation] done"],

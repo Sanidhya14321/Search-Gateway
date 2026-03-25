@@ -6,7 +6,18 @@ async def resolve_entity_node(state: CRMindState) -> dict:
     parsed = state.get("_parsed_filters", {})
     lookup = parsed.get("company_name") or state.get("query", "")
 
-    resolved = await resolve_entity(lookup)
+    try:
+        resolved = await resolve_entity(lookup)
+    except Exception as exc:
+        return {
+            "resolved_entity": None,
+            "entity_id": None,
+            "resolution_confidence": 0.0,
+            "degraded": True,
+            "steps_log": state.get("steps_log", [])
+            + [f"[resolve_entity] degraded error={type(exc).__name__}"],
+        }
+
     if resolved is None:
         return {
             "resolved_entity": None,

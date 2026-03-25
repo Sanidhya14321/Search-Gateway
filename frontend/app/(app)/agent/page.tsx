@@ -1,8 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { runAgent } from "@/lib/api/agent";
-import { DebugPanel } from "@/components/debug/debug-panel";
+
+const DebugPanel = dynamic(
+  () => import("@/components/debug/debug-panel").then((mod) => mod.DebugPanel),
+  { ssr: false },
+);
 
 const WORKFLOWS = ["lead_finder", "account_brief", "crm_enrichment", "research", "ops_debug"];
 
@@ -47,6 +52,14 @@ export default function AgentPage() {
         </button>
       </form>
       {error ? <p className="text-red-600">{error}</p> : null}
+      {running && !result ? (
+        <div className="animate-pulse rounded-xl border border-stone-200 bg-white/90 p-4">
+          <div className="h-4 w-40 rounded bg-stone-200" />
+          <div className="mt-3 h-3 w-full rounded bg-stone-200" />
+          <div className="mt-2 h-3 w-5/6 rounded bg-stone-200" />
+          <div className="mt-2 h-3 w-4/6 rounded bg-stone-200" />
+        </div>
+      ) : null}
       {result ? <pre className="overflow-x-auto rounded-xl border border-stone-200 bg-white/90 p-4 text-xs text-stone-800">{JSON.stringify(result, null, 2)}</pre> : null}
       <DebugPanel steps={steps} chunks={result?.ranked_chunks || []} cacheHit={Boolean(result?.cache_hit)} durationMs={result?.duration_ms || 0} />
     </main>

@@ -115,6 +115,44 @@ async def save_entity(
     return {"id": str(row["id"]), "saved_at": row["created_at"].isoformat()}
 
 
+async def update_saved_entity(
+    db: asyncpg.Connection,
+    user_id: str,
+    entity_id: str,
+    entity_name: str | None = None,
+    note: str | None = None,
+    tags: list[str] | None = None,
+) -> dict:
+    row = await db.fetchrow(
+        """
+        UPDATE user_saved_entities
+        SET entity_name = COALESCE($3, entity_name),
+            note = $4,
+            tags = COALESCE($5::text[], tags)
+        WHERE user_id=$1::uuid AND entity_id=$2::uuid
+        RETURNING id, entity_id, entity_name, note, tags, created_at
+        """,
+        user_id,
+        entity_id,
+        entity_name,
+        note,
+        tags,
+    )
+    if row is None:
+        return {"updated": False}
+    return {
+        "updated": True,
+        "item": {
+            "id": str(row["id"]),
+            "entity_id": str(row["entity_id"]),
+            "entity_name": row["entity_name"],
+            "note": row["note"],
+            "tags": row["tags"],
+            "created_at": row["created_at"].isoformat(),
+        },
+    }
+
+
 async def get_saved_entities(
     db: asyncpg.Connection,
     user_id: str,

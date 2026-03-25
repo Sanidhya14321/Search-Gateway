@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends
 
 from backend.database import get_pool
 from backend.middleware.auth import AuthenticatedUser, get_current_user
-from backend.models.requests import PaginationParams, SaveEntityRequest
-from backend.services.user_service import get_saved_entities, get_search_history, save_entity
+from backend.models.requests import PaginationParams, SaveEntityRequest, UpdateSavedEntityRequest
+from backend.services.user_service import get_saved_entities, get_search_history, save_entity, update_saved_entity
 
 router = APIRouter(prefix="/user", tags=["user"])
 
@@ -74,6 +74,25 @@ async def remove_bookmark(
             entity_id,
         )
     return {"removed": True}
+
+
+@router.patch("/saved/{entity_id}")
+async def update_bookmark(
+    entity_id: str,
+    body: UpdateSavedEntityRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    async with pool.acquire() as db:
+        result = await update_saved_entity(
+            db=db,
+            user_id=current_user.user_id,
+            entity_id=entity_id,
+            entity_name=body.entity_name,
+            note=body.note,
+            tags=body.tags,
+        )
+    return result
 
 
 @router.get("/enrichment-jobs")

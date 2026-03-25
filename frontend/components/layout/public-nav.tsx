@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/common/theme-toggle";
 
 const LINKS = [
   ["/", "Home"],
@@ -24,6 +25,7 @@ export function PublicNav() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Link href="/login" className="rounded-full border border-stone-300 px-3 py-1.5 text-sm text-stone-700">
             Login
           </Link>

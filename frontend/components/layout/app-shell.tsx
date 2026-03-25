@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "@/components/common/theme-toggle";
 import { useAuth } from "@/context/auth-context";
 
 const LINKS = [
@@ -38,6 +39,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </nav>
+          <ThemeToggle />
           <button
             onClick={() => signOut()}
             className="rounded-full border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700 hover:border-stone-900 hover:text-stone-900"

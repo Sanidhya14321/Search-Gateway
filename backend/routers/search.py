@@ -18,6 +18,8 @@ class SearchRequest(BaseModel):
     query: str
     entity_type: str | None = None
     filters: dict | None = None
+    candidate_limit: int = 5
+    context_limit: int = 3
 
 
 @router.post("")
@@ -27,6 +29,9 @@ async def search_endpoint(
     current_user: Optional[AuthenticatedUser] = Depends(get_optional_user),
 ):
     query = payload.query.strip()
+    candidate_limit = max(1, min(payload.candidate_limit, 20))
+    context_limit = max(1, min(payload.context_limit, 10))
+    entity_filter = payload.entity_type.strip().lower() if payload.entity_type else None
     resolved = await resolve_entity(query)
 
     rows = await db.fetch(
@@ -36,9 +41,10 @@ async def search_endpoint(
         FROM companies
         WHERE similarity(canonical_name, $1) > 0.3
         ORDER BY sim DESC
-        LIMIT 5
+        LIMIT $2
         """,
         query,
+        candidate_limit,
     )
     candidates = [
         {
@@ -50,7 +56,7 @@ async def search_endpoint(
         }
         for row in rows
     ]
-    if resolved is not None:
+    if resolved is not None and (not entity_filter or resolved.entity_type == entity_filter):
         candidates.insert(
             0,
             {
@@ -80,8 +86,8 @@ async def search_endpoint(
 
     response = {
         "query": query,
-        "candidates": candidates[:5],
-        "context_preview": context_preview,
+        "candidates": candidates[:candidate_limit],
+        "context_preview": context_preview[:context_limit],
     }
 
     if current_user is not None:
@@ -103,7 +109,19 @@ async def search_endpoint(
 @router.get("")
 async def search_endpoint_get(
     q: str = Query(..., min_length=1),
+    entity_type: str | None = Query(default=None),
+    candidate_limit: int = Query(default=5, ge=1, le=20),
+    context_limit: int = Query(default=3, ge=1, le=10),
     db=Depends(get_db_connection),
     current_user: Optional[AuthenticatedUser] = Depends(get_optional_user),
 ):
-    return await search_endpoint(SearchRequest(query=q), db, current_user)
+    return await search_endpoint(
+        SearchRequest(
+            query=q,
+            entity_type=entity_type,
+            candidate_limit=candidate_limit,
+            context_limit=context_limit,
+        ),
+        db,
+        current_user,
+    )

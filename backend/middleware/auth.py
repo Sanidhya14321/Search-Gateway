@@ -34,15 +34,29 @@ async def get_current_user(
     pool: asyncpg.Pool = Depends(get_pool),
 ) -> AuthenticatedUser:
     trace = get_trace_id()
+    bearer_error: HTTPException | None = None
 
     if credentials and credentials.scheme.lower() == "bearer":
+        token_value = credentials.credentials.strip()
+
+        if token_value == settings.internal_service_api_key:
+            return AuthenticatedUser(
+                user_id="service",
+                email="service@internal",
+                plan="admin",
+                auth_method="service",
+            )
+
+        if token_value.startswith(settings.api_key_prefix):
+            return await _verify_api_key(token_value, pool, trace)
+
         try:
-            return await _verify_jwt(credentials.credentials, pool, trace)
-        except HTTPException:
-            raise
+            return await _verify_jwt(token_value, pool, trace)
+        except HTTPException as exc:
+            bearer_error = exc
         except Exception as exc:
             logger.warning("jwt_error | trace_id={} error={}", trace, type(exc).__name__)
-            raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
+            bearer_error = HTTPException(status_code=401, detail="Invalid or expired token")
 
     if api_key:
         if api_key == settings.internal_service_api_key:
@@ -53,6 +67,9 @@ async def get_current_user(
                 auth_method="service",
             )
         return await _verify_api_key(api_key, pool, trace)
+
+    if bearer_error is not None:
+        raise bearer_error
 
     raise HTTPException(
         status_code=401,

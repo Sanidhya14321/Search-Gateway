@@ -15,6 +15,7 @@ from backend.models.requests import (
     AuthLoginRequest,
     AuthSignupRequest,
     CreateApiKeyRequest,
+    UpdateApiKeyRequest,
     UpdatePreferencesRequest,
 )
 from backend.services.user_service import create_api_key, update_user_preferences
@@ -277,3 +278,36 @@ async def revoke_api_key(
     if result == "UPDATE 0":
         raise HTTPException(status_code=404, detail="API key not found")
     return {"revoked": True}
+
+
+@router.patch("/api-keys/{key_id}")
+async def update_api_key(
+    key_id: str,
+    body: UpdateApiKeyRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    expires_at = None
+    if body.expires_in_days is not None:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=body.expires_in_days)
+
+    async with pool.acquire() as db:
+        row = await db.fetchrow(
+            """
+            UPDATE user_api_keys
+            SET name = COALESCE($3, name),
+                expires_at = COALESCE($4, expires_at),
+                is_active = CASE WHEN $5 THEN false ELSE is_active END
+            WHERE id=$1::uuid AND user_id=$2::uuid
+            RETURNING id, key_prefix, name, last_used_at, expires_at, is_active, created_at
+            """,
+            key_id,
+            current_user.user_id,
+            body.name,
+            expires_at,
+            body.revoke,
+        )
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="API key not found")
+    return {"api_key": dict(row)}

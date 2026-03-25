@@ -34,6 +34,18 @@ class CreateApiKeyRequest(BaseModel):
     expires_in_days: Optional[int] = Field(default=None, ge=1, le=365)
 
 
+class UpdateApiKeyRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    expires_in_days: Optional[int] = Field(default=None, ge=1, le=365)
+    revoke: bool = Field(default=False)
+
+
+class UpdateSavedEntityRequest(BaseModel):
+    entity_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    note: Optional[str] = None
+    tags: Optional[list[str]] = Field(default=None)
+
+
 class AuthSignupRequest(BaseModel):
     email: str = Field(..., min_length=5, max_length=512)
     password: str = Field(..., min_length=8, max_length=128)

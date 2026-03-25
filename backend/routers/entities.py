@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from backend.dependencies import get_db_connection
 from backend.middleware.auth import AuthenticatedUser, get_current_user
@@ -9,6 +9,11 @@ router = APIRouter(prefix="/entity", tags=["entities"])
 @router.get("/{canonical_id}")
 async def entity_detail(
     canonical_id: str,
+    facts_limit: int = Query(default=25, ge=1, le=100),
+    signals_limit: int = Query(default=25, ge=1, le=100),
+    people_limit: int = Query(default=50, ge=1, le=200),
+    citations_limit: int = Query(default=25, ge=1, le=100),
+    include_roles: bool = Query(default=True),
     db=Depends(get_db_connection),
     _: AuthenticatedUser = Depends(get_current_user),
 ):
@@ -32,8 +37,22 @@ async def entity_detail(
     else:
         return {"entity_id": canonical_id, "entity_type": "unknown", "degraded": True, "facts": [], "signals": [], "people": [], "citations": []}
 
-    facts = [dict(row) for row in await db.fetch("SELECT claim, confidence, source_url FROM facts WHERE entity_id=$1::uuid ORDER BY extracted_at DESC LIMIT 25", entity_id)]
-    signals = [dict(row) for row in await db.fetch("SELECT signal_type, description, confidence, source_url, detected_at FROM signals WHERE entity_id=$1::uuid ORDER BY detected_at DESC LIMIT 25", entity_id)]
+    facts = [
+        dict(row)
+        for row in await db.fetch(
+            "SELECT claim, confidence, source_url FROM facts WHERE entity_id=$1::uuid ORDER BY extracted_at DESC LIMIT $2",
+            entity_id,
+            facts_limit,
+        )
+    ]
+    signals = [
+        dict(row)
+        for row in await db.fetch(
+            "SELECT signal_type, description, confidence, source_url, detected_at FROM signals WHERE entity_id=$1::uuid ORDER BY detected_at DESC LIMIT $2",
+            entity_id,
+            signals_limit,
+        )
+    ]
 
     people = []
     roles = []
@@ -41,24 +60,27 @@ async def entity_detail(
         people = [
             dict(row)
             for row in await db.fetch(
-                "SELECT full_name, current_title, seniority_level, linkedin_url FROM people WHERE current_company_id=$1::uuid LIMIT 50",
+                "SELECT full_name, current_title, seniority_level, linkedin_url FROM people WHERE current_company_id=$1::uuid LIMIT $2",
                 entity_id,
+                people_limit,
             )
         ]
     else:
-        roles = [
-            dict(row)
-            for row in await db.fetch(
-                "SELECT title, is_current, start_date, end_date, source_url FROM roles WHERE person_id=$1::uuid ORDER BY start_date DESC",
-                entity_id,
-            )
-        ]
+        if include_roles:
+            roles = [
+                dict(row)
+                for row in await db.fetch(
+                    "SELECT title, is_current, start_date, end_date, source_url FROM roles WHERE person_id=$1::uuid ORDER BY start_date DESC",
+                    entity_id,
+                )
+            ]
 
     citations = [
         dict(row)
         for row in await db.fetch(
-            "SELECT source_url AS url, source_type, fetched_at, trust_score, freshness_score FROM source_documents WHERE entity_id=$1::uuid ORDER BY fetched_at DESC LIMIT 25",
+            "SELECT source_url AS url, source_type, fetched_at, trust_score, freshness_score FROM source_documents WHERE entity_id=$1::uuid ORDER BY fetched_at DESC LIMIT $2",
             entity_id,
+            citations_limit,
         )
     ]
 

@@ -9,13 +9,18 @@ interface ApiKey {
   name: string;
   created_at: string;
   last_used_at: string | null;
+  expires_at?: string | null;
 }
 
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [rotatingKeyId, setRotatingKeyId] = useState<string | null>(null);
   const [newKey, setNewKey] = useState<string | null>(null);
+  const [keyName, setKeyName] = useState(`UI Key ${new Date().toISOString().slice(0, 10)}`);
+  const [expiresInDays, setExpiresInDays] = useState<string>("30");
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     async function loadKeys() {
@@ -33,25 +38,35 @@ export default function ApiKeysPage() {
   }, []);
 
   const createNewKey = async () => {
+    if (!keyName.trim()) {
+      setError("API key name is required");
+      return;
+    }
+
     setCreating(true);
+    setError("");
 
     try {
       const data = await apiPost(`/api/v1/auth/api-keys`, {
-        name: `UI Key ${new Date().toISOString().slice(0, 10)}`,
+        name: keyName.trim(),
+        expires_in_days: expiresInDays ? Number(expiresInDays) : undefined,
       });
       setNewKey(data.raw_key);
-      setApiKeys([
-        ...apiKeys,
+      setApiKeys((prev) => [
         {
           id: data.id,
           key_prefix: data.key_prefix,
           name: data.name,
           created_at: data.created_at,
           last_used_at: null,
+          expires_at: data.expires_at,
         },
+        ...prev,
       ]);
+      setKeyName(`UI Key ${new Date().toISOString().slice(0, 10)}`);
     } catch (e) {
       console.error("Failed to create key:", e);
+      setError((e as Error)?.message || "Failed to create API key");
     }
 
     setCreating(false);
@@ -61,9 +76,40 @@ export default function ApiKeysPage() {
     try {
       await apiDelete(`/api/v1/auth/api-keys/${keyId}`);
 
-      setApiKeys(apiKeys.filter((k) => k.id !== keyId));
+      setApiKeys((prev) => prev.filter((k) => k.id !== keyId));
     } catch (e) {
       console.error("Failed to revoke key:", e);
+      setError((e as Error)?.message || "Failed to revoke API key");
+    }
+  };
+
+  const rotateKey = async (key: ApiKey) => {
+    setRotatingKeyId(key.id);
+    setError("");
+    try {
+      const data = await apiPost(`/api/v1/auth/api-keys`, {
+        name: `${key.name} (rotated ${new Date().toISOString().slice(0, 10)})`,
+        expires_in_days: expiresInDays ? Number(expiresInDays) : undefined,
+      });
+      await apiDelete(`/api/v1/auth/api-keys/${key.id}`);
+
+      setNewKey(data.raw_key);
+      setApiKeys((prev) => [
+        {
+          id: data.id,
+          key_prefix: data.key_prefix,
+          name: data.name,
+          created_at: data.created_at,
+          last_used_at: null,
+          expires_at: data.expires_at,
+        },
+        ...prev.filter((item) => item.id !== key.id),
+      ]);
+    } catch (e) {
+      console.error("Failed to rotate key:", e);
+      setError((e as Error)?.message || "Failed to rotate API key");
+    } finally {
+      setRotatingKeyId(null);
     }
   };
 
@@ -80,6 +126,32 @@ export default function ApiKeysPage() {
 
       <section className="glass rounded-2xl p-5 space-y-4">
         <h2 className="font-display text-2xl text-stone-900">Create a key</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="text-sm text-stone-700">
+            Key name
+            <input
+              value={keyName}
+              onChange={(e) => setKeyName(e.target.value)}
+              placeholder="Production CI key"
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800"
+            />
+          </label>
+          <label className="text-sm text-stone-700">
+            Expiration
+            <select
+              value={expiresInDays}
+              onChange={(e) => setExpiresInDays(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800"
+            >
+              <option value="">No expiration</option>
+              <option value="7">7 days</option>
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="180">180 days</option>
+              <option value="365">365 days</option>
+            </select>
+          </label>
+        </div>
         <button
           onClick={createNewKey}
           disabled={creating}
@@ -87,6 +159,7 @@ export default function ApiKeysPage() {
         >
           {creating ? "Creating..." : "+ Create API Key"}
         </button>
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
       </section>
 
       {newKey && (
@@ -134,15 +207,25 @@ export default function ApiKeysPage() {
                 <p className="text-xs text-stone-600">{key.name}</p>
                 <p className="text-xs text-stone-500">
                   Created {new Date(key.created_at).toLocaleDateString()}
+                  {key.expires_at && ` · Expires ${new Date(key.expires_at).toLocaleDateString()}`}
                   {key.last_used_at && ` · Last used ${new Date(key.last_used_at).toLocaleDateString()}`}
                 </p>
               </div>
-              <button
-                onClick={() => revokeKey(key.id)}
-                className="rounded-lg border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-50"
-              >
-                Revoke
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => rotateKey(key)}
+                  disabled={rotatingKeyId === key.id}
+                  className="rounded-lg border border-stone-300 px-3 py-1 text-xs text-stone-700 hover:border-stone-900 disabled:opacity-60"
+                >
+                  {rotatingKeyId === key.id ? "Rotating..." : "Rotate"}
+                </button>
+                <button
+                  onClick={() => revokeKey(key.id)}
+                  className="rounded-lg border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-50"
+                >
+                  Revoke
+                </button>
+              </div>
             </div>
           ))}
         </section>
